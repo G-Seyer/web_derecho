@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="es">
+ <head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>
+   AEPRA
+  </title>
+  <link href="{{ url_for('static', filename='estilos.css') }}" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+ </head>
+ <body>
+  <!-- HERO CON LOGO Y MENÚ -->
+<header class="barra-superior">
+  <div class="logos-combinados">
+    <img src="{{ url_for('static', filename='img/imagen_principal.png') }}" style="height: 75px; border: 5px dashed rgba(255, 255, 255, 0);"/>
+  </div>
+  <div class="menu-icon" onclick="toggleMenu()">☰</div>
+  <nav class="menu-links" id="menu">
+    <a href="/">Inicio</a>
+    <a href="/contacto">Contacto</a>
+    <a href="/#servicios">Servicios</a>
+    <a href="/privacidad">Políticas</a>
+  </nav>
+</header>
+
+<!-- HERO con título y botón -->
+<section class="hero" id="home">
+  <div class="contenido-hero">
+    <h1>Adquiere tu póliza jurídica para rentar tu inmueble sin que lo pongas en riesgo.</h1>
+    <p>Contarás con respaldo legal en minutos.</p>
+    <a class="btn-principal" href="https://wa.me/5551882212?text=Hola,%20quiero%20más%20información%20sobre%20el%20servicio" target="_blank">Solicitar ahora</a>
+  </div>
+</section>
+
+  <!-- SECCIÓN BENEFICIOS -->
+  <section class="seccion fondo-marca" id="beneficios">
+   <h2>
+    ¿Por qué elegirnos?
+   </h2>
+   <div class="grid">
+    <div class="card">
+     ✅ Experiencia de más de 15 años
+    </div>
+    <div class="card">
+     💼 Se hace una investigación  jurídica de antecedentes de los prospectos
+    </div>
+    <div class="card">
+     🔒 Aprobacion rápida
+    </div>
+   </div>
+  </section>
+  <!-- INFORMACIÓN DEL SERVICIO -->
+  <section class="seccion fondo-marca" id="servicios">
+   <h2>
+    ¿Qué incluye nuestro servicio?
+   </h2>
+   <div class="cuadros-servicio">
+    <div class="cuadro">
+     <h3>
+      📝 Contrato legal
+     </h3>
+     <p>
+      Elaboración y validación del contrato de arrendamiento con respaldo jurídico.
+     </p>
+    </div>
+    <div class="cuadro">
+     <h3>
+      📑 Acompañamiento a la firma del contrato por uno de nuestros asesores
+     </h3>
+     <p>
+      Todos los trámites se realizan 100% en línea sin necesidad de acudir físicamente.
+     </p>
+    </div>
+    <div class="cuadro">
+     <h3>
+      ⏱️ Respuesta rápida
+     </h3>
+     <p>
+      Aprobación en 48 horas.
+     </p>
+    </div>
+    <div class="cuadro">
+     <h3>
+      🔒 Protección al propietario
+     </h3>
+     <p>
+      Garantía jurídica en caso de incumplimiento de pago del inquilino.
+     </p>
+    </div>
+   </div>
+  </section>
+  <!-- DOCUMENTACIÓN NECESARIA -->
+  <section class="documentos-section">
+   <h2>
+    ¿Qué documentos necesito?
+   </h2>
+   <div class="documentos-contenedor">
+    <div class="documentos-col propietario">
+     <h3>
+      🧑‍💼 Propietario (Arrendador)
+     </h3>
+     <ul>
+      <li>
+       🪪 Identificación oficial
+      </li>
+      <li>
+       🏠 Comprobante de domicilio
+      </li>
+      <li>
+       📄 Escritura del inmueble
+      </li>
+      <li>
+       📑 Contrato o poder notarial
+      </li>
+      <li>
+       📘 Constancia del folio real
+      </li>
+     </ul>
+    </div>
+    <div class="documentos-col inquilino">
+     <h3>
+      👤 Inquilino (Arrendatario)
+     </h3>
+     <ul>
+      <li>
+       🪪 Identificación oficial
+      </li>
+      <li>
+       🏠 Comprobante de domicilio
+      </li>
+      <li>
+       💰 Comprobante de ingresos
+      </li>
+      <li>
+       📝 Solicitud de arrendamiento
+      </li>
+      <li>
+       🧾 Aval
+      </li>
+     </ul>
+    </div>
+   </div>
+  </section>
+  <!-- POR QUÉ CONTRATARNOS -->
+  <section class="seccion fondo-marca" id="porque-nosotros">
+   <div class="porque-wrap">
+    <div class="contenedor-central">
+     <div class="porque-img">
+      <img alt="Acuerdo legal" src="{{ url_for('static', filename='img/acuerdo.png') }}"/>
+     </div>
+     <div class="porque-texto">
+      <h2>
+       ¿Por qué contratar nuestros servicios?
+      </h2>
+      <ul>
+       <li>
+        <span class="check-icon">
+         ✔
+        </span>
+        15 años de experiencia en servicios de asesoría legal en el ramo inmobiliario
+       </li>
+       <li>
+        <span class="check-icon">
+         ✔
+        </span>
+        Contamos con un equipo de abogados y asesores especializados que te acompañarán en cada etapa del proceso.
+       </li>
+       <li>
+        <span class="check-icon">
+         ✔
+        </span>
+        2942 casos de éxito y de clientes satisfechos por el servicio
+       </li>
+      </ul>
+     </div>
+    </div>
+   </div>
+  </section>
+  <!-- PAQUETES -->
+  <section class="seccion fondo-marca" id="paquetes">
+   <h2 class="titulo-seccion">
+    Nuestros Paquetes de Garantía Jurídica
+   </h2>
+   <div class="paquetes-contenedor">
+    <div class="paquete">
+     <h3>
+      Póliza Jurídica Tradicional
+     </h3>
+     <ul>
+      <li>
+       📄 Contrato de arrendamiento personalizado
+      </li>
+      <li>
+       🔍 Investigación de historial del inquilino
+      </li>
+      <li>
+       ⚖️ Asesoría legal básica durante el arrendamiento
+      </li>
+      <li>
+       📑 Revisión de documentos de las partes
+      </li>
+      <li>
+       📞 Atención vía telefónica y correo
+      </li>
+      <li>
+       🏛️ Acompañamiento en firma de contrato presencial
+      </li>
+      <li>
+       ⚠️ Gestión en caso de incumplimiento o adeudo
+      </li>
+      <li>
+       📲 Atención personalizada por WhatsApp
+      </li>
+     </ul>
+     <a class="boton-paquete" href="https://wa.me/5551882212?text=Hola%2C%20quiero%20solicitar%20el%20paquete%20Tradicional" target="_blank">
+      Solicitar Tradicional
+     </a>
+    </div>
+    <div class="paquete destacado">
+     <h3>
+      Póliza Jurídica Plus ⭐
+     </h3>
+     <ul>
+      <li>
+       ✔ Todo lo incluido en el paquete Tradicional
+      </li>
+      <li>
+       🏢 Administración del inmueble arrendado
+      </li>
+      <li>
+       💳 Cobro de rentas y pago en cuenta del propietario
+      </li>
+      <li>
+       🛠️ Resolver temas de mantenimiento con el inquilino
+      </li>
+      <li>
+       🤝 Atención al inquilino ante cualquier duda o problema
+      </li>
+      <li>
+       🚨 Prioridad en tiempos de respuesta legal
+      </li>
+     </ul>
+     <a class="boton-paquete" href="https://wa.me/5551882212?text=Hola%2C%20quiero%20solicitar%20el%20paquete%20Plus" target="_blank">
+      Solicitar Plus
+     </a>
+    </div>
+   </div>
+  </section>
+  <!-- PREGUNTAS FRECUENTES -->
+  <section class="seccion fondo-marca" id="faq">
+   <h2>
+    Preguntas Frecuentes
+   </h2>
+   <details>
+    <summary>
+     ¿Necesito presentar papeles?
+    </summary>
+    <p>
+     Sí, es obligatorio presentar la documentación requerida para iniciar el trámite.
+    </p>
+   </details>
+   <details>
+    <summary>
+     ¿En cuánto tiempo se aprueba?
+    </summary>
+    <p>
+     Por lo general, el proceso de aprobación se realiza en un plazo mínimo de 48 horas.
+    </p>
+   </details>
+  </section>
+  <!-- FORMULARIO DE CONTACTO -->
+  <form action="/guardar_contacto" id="formInicio" method="POST">
+   <input name="nombre" placeholder="Tu nombre" required="" type="text"/>
+   <input name="correo" placeholder="Correo electrónico" required="" type="email"/>
+   <input name="telefono" placeholder="Número de teléfono (opcional)" type="tel"/>
+   <textarea name="mensaje" placeholder="Tu mensaje" required=""></textarea>
+   <button class="btn btn-primary" id="botonEnviarInicio" type="submit">
+    <span aria-hidden="true" class="spinner-border spinner-border-sm me-2 d-none" id="spinnerInicio" role="status">
+    </span>
+    Enviar
+   </button>
+  </form>
+  <!-- BOTONES FLOTANTES -->
+  <div class="botones-flotantes">
+   <a class="boton-flotante llamar" href="tel:+5542094352" title="Llamar">
+    📞
+   </a>
+   <a class="boton-flotante whatsapp" href="https://wa.me/5551882212?text=Hola%2C%20vi%20su%20sitio%20web%20y%20me%20gustaría%20recibir%20asesoría%20sobre%20las%20garantías%20de%20arrendamiento.%20¿Podrían%20darme%20más%20información%3F" target="_blank" title="WhatsApp">
+    💬
+   </a>
+  </div>
+  <!-- MAPS -->
+  <section class="seccion ubicacion-contacto fondo-marca" id="ubicacion">
+   <h2 class="titulo-seccion">
+    Ubicación y contacto directo
+   </h2>
+   <div class="contenedor-ubicacion">
+    <div class="mapa">
+     <iframe allowfullscreen="" height="250" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3762.2606223313476!2d-99.16587892407587!3d19.440752240985206!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x85d1ff824dfcf25d%3A0x52fc66219fbd0469!2sInsurgentes%20Sur%20716%2C%20Colonia%20del%20Valle%20Centro%2C%20Benito%20Ju%C3%A1rez%2C%2003100%20Ciudad%20de%20M%C3%A9xico%2C%20CDMX!5e0!3m2!1ses!2smx!4v1721068492580!5m2!1ses!2smx" style="border:0; border-radius: 10px;" width="100%">
+     </iframe>
+    </div>
+    <div class="telefono">
+     <p>
+      📞 Teléfono fijo:
+      <strong>
+       55 4209 4352
+      </strong>
+     </p>
+    </div>
+   </div>
+  </section>
+  <!-- PIE DE PÁGINA -->
+  <footer>
+   <p>
+    © 2025 Renta Segura. Todos los derechos reservados.
+   </p>
+  </footer>
+  <!-- Script para proteger el botón del formulario -->
+  <script>
+   const formInicio = document.getElementById("formInicio");
+  formInicio.addEventListener("submit", function (e) {
+    const boton = document.getElementById("botonEnviarInicio");
+    const spinner = document.getElementById("spinnerInicio");
+
+    boton.disabled = true;
+    spinner.classList.remove("d-none");
+    boton.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Enviando...`;
+  });
+  </script>
+  <script>
+   function toggleMenu() {
+    const menu = document.getElementById('menu');
+    menu.classList.toggle('show');
+  }
+  </script>
+ </body>
+</html>

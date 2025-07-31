@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contacto | Renta Segura</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+</head>
+<body class="fondo-marca">
+
+  <header class="barra-superior">
+    <div class="logos-combinados">
+      <img src="{{ url_for('static', filename='img/imagen_principal.png') }}" style="height: 75px; border: 5px dashed rgba(255, 255, 255, 0);"/>
+    </div>
+    <nav class="menu">
+      <a href="/">Inicio</a>
+      <a href="/#servicios">Servicios</a>
+      <a href="/privacidad">Privacidad</a>
+    </nav>
+  </header>
+
+  <main class="formulario-contacto">
+    <h1>Contáctanos</h1>
+    <p>Completa el formulario y nos pondremos en contacto contigo lo antes posible.</p>
+
+    <form action="/guardar_contacto" method="POST">
+      <div class="campo">
+        <label for="nombre">Nombre completo</label>
+        <input type="text" id="nombre" name="nombre" required>
+      </div>
+
+      <div class="campo">
+        <label for="correo">Correo electrónico</label>
+        <input type="email" id="correo" name="correo" required>
+      </div>
+
+      <div class="campo">
+        <label for="telefono">Número de teléfono</label>
+        <input type="tel" id="telefono" name="telefono">
+      </div>
+
+      <div class="campo">
+        <label for="mensaje">Mensaje</label>
+        <textarea id="mensaje" name="mensaje" rows="5" required></textarea>
+      </div>
+
+      <button type="submit" id="botonEnviar" class="boton btn btn-primary">
+        <span class="spinner-border spinner-border-sm me-2 d-none" role="status" aria-hidden="true" id="spinner"></span>
+        Enviar mensaje
+      </button>
+    </form>
+  </main>
+
+  <script>
+    const form = document.querySelector("form");
+    form.addEventListener("submit", function (e) {
+      const boton = document.getElementById("botonEnviar");
+      const spinner = document.getElementById("spinner");
+
+      boton.disabled = true;
+      spinner.classList.remove("d-none");
+      boton.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Enviando...`;
+    });
+  </script>
+
+</body>
+</html>
