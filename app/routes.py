@@ -38,11 +38,13 @@ def enviar_correo(nombre, correo, telefono, mensaje):
     msg = MIMEText(cuerpo)
     msg['Subject'] = "Nuevo mensaje desde la página web"
     msg['From'] = os.getenv("EMAIL_USER")
-    msg['To'] = "EMAIL_USER"
+    msg['To'] = os.getenv("EMAIL_USER")  # ← usa la variable real
 
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(os.getenv("EMAIL_USER"), os.getenv("EMAIL_PASS"))
         smtp.send_message(msg)
+
+        
 
 # Conexión a la base de datos PostgreSQL (solo cuando se usa)
 def obtener_conexion():
@@ -58,18 +60,24 @@ def obtener_conexion():
 
 @main.route("/guardar_contacto", methods=["POST"])
 def guardar_contacto():
-    nombre = request.form.get("nombre")
-    correo = request.form.get("correo")
-    telefono = request.form.get("telefono")
-    mensaje = request.form.get("mensaje")
+    try:
+        nombre = request.form.get("nombre")
+        correo = request.form.get("correo")
+        telefono = request.form.get("telefono")
+        mensaje = request.form.get("mensaje")
 
-    nuevo = Contacto(nombre=nombre, correo=correo, telefono=telefono, mensaje=mensaje)
-    db.session.add(nuevo)
-    db.session.commit()
+        nuevo = Contacto(nombre=nombre, correo=correo, telefono=telefono, mensaje=mensaje)
+        db.session.add(nuevo)
+        db.session.commit()
 
-    enviar_correo(nombre, correo, telefono, mensaje)
+        enviar_correo(nombre, correo, telefono, mensaje)
 
-    return redirect("/gracias")
+        return redirect("/gracias")
+
+    except Exception as e:
+        print("❌ ERROR al guardar o enviar correo:", e)
+        return "Error interno del servidor", 500
+
 
 
 # Página de agradecimiento
