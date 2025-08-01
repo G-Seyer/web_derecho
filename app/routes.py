@@ -5,6 +5,7 @@ import psycopg2
 import smtplib
 from email.mime.text import MIMEText
 from app.models import Contacto
+from app import db
 
 main = Blueprint('main', __name__)
 
@@ -54,6 +55,7 @@ def obtener_conexion():
     )
 
 # Procesamiento del formulario
+
 @main.route("/guardar_contacto", methods=["POST"])
 def guardar_contacto():
     nombre = request.form.get("nombre")
@@ -61,21 +63,14 @@ def guardar_contacto():
     telefono = request.form.get("telefono")
     mensaje = request.form.get("mensaje")
 
-    conn = obtener_conexion()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        INSERT INTO contacto (nombre, correo, telefono, mensaje)
-        VALUES (%s, %s, %s, %s)
-    """, (nombre, correo, telefono, mensaje))
-
-    conn.commit()
-    cursor.close()
-    conn.close()
+    nuevo = Contacto(nombre=nombre, correo=correo, telefono=telefono, mensaje=mensaje)
+    db.session.add(nuevo)
+    db.session.commit()
 
     enviar_correo(nombre, correo, telefono, mensaje)
 
     return redirect("/gracias")
+
 
 # Página de agradecimiento
 @main.route('/gracias')
