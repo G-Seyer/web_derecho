@@ -4,6 +4,7 @@ import os
 import psycopg2
 import smtplib
 from email.mime.text import MIMEText
+from app.models import Contacto
 
 main = Blueprint('main', __name__)
 
