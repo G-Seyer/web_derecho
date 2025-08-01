@@ -10,6 +10,7 @@ __pycache__/
 # Archivos de entorno y claves secretas
 .env
 .env.*
+crear_tablas.py
 
 # Archivos del sistema
 .DS_Store

@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv()
 from flask import Flask
 from config import Config
 from flask_sqlalchemy import SQLAlchemy
@@ -15,5 +17,7 @@ def create_app():
 
     from app.routes import main
     app.register_blueprint(main)
+
+    from app import models  # al final de create_app(), antes de return app
 
     return app
