@@ -67,7 +67,7 @@ def guardar_contacto():
     db.session.add(nuevo)
     db.session.commit()
 
-    enviar_correo(nombre, correo, telefono, mensaje)
+    #enviar_correo(nombre, correo, telefono, mensaje)
 
     return redirect("/gracias")
 
