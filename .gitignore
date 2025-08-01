@@ -11,6 +11,7 @@ __pycache__/
 .env
 .env.*
 crear_tablas.py
+correo_test.py
 
 # Archivos del sistema
 .DS_Store

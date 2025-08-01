@@ -38,7 +38,7 @@ def enviar_correo(nombre, correo, telefono, mensaje):
     msg = MIMEText(cuerpo)
     msg['Subject'] = "Nuevo mensaje desde la página web"
     msg['From'] = os.getenv("EMAIL_USER")
-    msg['To'] = "giovannirodeareyes@gmail.com"
+    msg['To'] = "EMAIL_USER"
 
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(os.getenv("EMAIL_USER"), os.getenv("EMAIL_PASS"))
