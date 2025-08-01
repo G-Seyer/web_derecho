@@ -1,24 +1,11 @@
-from dotenv import load_dotenv
-import os
 
-load_dotenv()
 from flask import Blueprint, request, redirect, render_template
+import os
 import psycopg2
 import smtplib
 from email.mime.text import MIMEText
 
 main = Blueprint('main', __name__)
-
-# Conexión a la base de datos PostgreSQL
-conn = psycopg2.connect(
-    dbname=os.getenv("DB_NAME"),
-    user=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASS"),
-    host=os.getenv("DB_HOST"),
-    port=os.getenv("DB_PORT")
-)
-
-cursor = conn.cursor()
 
 # Página principal
 @main.route("/")
@@ -48,12 +35,22 @@ def enviar_correo(nombre, correo, telefono, mensaje):
     """
     msg = MIMEText(cuerpo)
     msg['Subject'] = "Nuevo mensaje desde la página web"
-    msg['From'] = "giogemecu23@gmail.com"
+    msg['From'] = os.getenv("EMAIL_USER")
     msg['To'] = "aepra.10@gmail.com"
 
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(os.getenv("EMAIL_USER"), os.getenv("EMAIL_PASS"))
         smtp.send_message(msg)
+
+# Conexión a la base de datos PostgreSQL (solo cuando se usa)
+def obtener_conexion():
+    return psycopg2.connect(
+        dbname=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASS"),
+        host=os.getenv("DB_HOST"),
+        port=os.getenv("DB_PORT")
+    )
 
 # Procesamiento del formulario
 @main.route("/guardar_contacto", methods=["POST"])
@@ -63,12 +60,18 @@ def guardar_contacto():
     telefono = request.form.get("telefono")
     mensaje = request.form.get("mensaje")
 
+    conn = obtener_conexion()
+    cursor = conn.cursor()
+
     cursor.execute("""
         INSERT INTO contacto (nombre, correo, telefono, mensaje)
         VALUES (%s, %s, %s, %s)
     """, (nombre, correo, telefono, mensaje))
 
     conn.commit()
+    cursor.close()
+    conn.close()
+
     enviar_correo(nombre, correo, telefono, mensaje)
 
     return redirect("/gracias")
