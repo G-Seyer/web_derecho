@@ -21,3 +21,6 @@ def create_app():
     from app import models  # al final de create_app(), antes de return app
 
     return app
+
+# 🔹 Instancia global de la aplicación para Gunicorn
+app = create_app()

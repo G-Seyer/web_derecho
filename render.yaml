@@ -3,7 +3,7 @@ services:
     name: web-derecho
     env: python
     buildCommand: ""
-    startCommand: gunicorn run:app
+    startCommand: gunicorn app:app
     plan: free
     region: oregon
     runtime: python
