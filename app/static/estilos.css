@@ -604,7 +604,14 @@ footer {
   box-shadow: 0 4px 12px rgba(0,0,0,0.05);
   display: inline-block;
 }
+.telefono a {
+  color: #000;
+  text-decoration: none;
+}
 
+.telefono a:hover {
+  text-decoration: underline;
+}
 /*contacto*/
 .formulario-contacto {
   max-width: 600px;
