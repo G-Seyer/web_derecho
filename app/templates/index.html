@@ -91,57 +91,52 @@
    </div>
   </section>
   <!-- DOCUMENTACIÓN NECESARIA -->
-  <section class="documentos-section">
-   <h2>
-    ¿Qué documentos necesito?
-   </h2>
-   <div class="documentos-contenedor">
-    <div class="documentos-col propietario">
-     <h3>
-      🧑‍💼 Propietario (Arrendador)
-     </h3>
-     <ul>
-      <li>
-       🪪 Identificación oficial
-      </li>
-      <li>
-       🏠 Comprobante de domicilio
-      </li>
-      <li>
-       📄 Escritura del inmueble
-      </li>
-      <li>
-       📑 Contrato o poder notarial
-      </li>
-      <li>
-       📘 Constancia del folio real
-      </li>
-     </ul>
+<section class="documentos-section">
+  <h2>¿Qué documentos necesito?</h2>
+
+    <div class="documentos-contenedor">
+      <!-- Columna PROPIETARIO -->
+      <div class="documentos-col propietario">
+        <h3>🧑‍💼 Propietario (Arrendador)</h3>
+        <ul>
+          <li>🪪 Identificación oficial</li>
+          <li>🏠 Comprobante de domicilio</li>
+          <li>📄 Escritura del inmueble</li>
+          <li>📑 Contrato o poder notarial</li>
+          <li>📘 Constancia del folio real</li>
+        </ul>
+
+        <!-- botón debajo -->
+        <div class="doc-btn-wrap">
+          <a href="{{ url_for('main.documentos_propietario') }}"
+            class="btn btn-doc btn-lg px-4">
+            🧑‍💼 Subir documentos – Propietario
+          </a>
+        </div>
+      </div>
+
+      <!-- Columna INQUILINO -->
+      <div class="documentos-col inquilino">
+        <h3>👤 Inquilino (Arrendatario)</h3>
+        <ul>
+          <li>🪪 Identificación oficial</li>
+          <li>🏠 Comprobante de domicilio</li>
+          <li>💰 Comprobante de ingresos</li>
+          <li>📝 Solicitud de arrendamiento</li>
+          <li>🧾 Aval</li>
+        </ul>
+
+        <!-- botón debajo -->
+        <div class="doc-btn-wrap">
+          <a href="{{ url_for('main.documentos_inquilino') }}"
+            class="btn btn-doc btn-lg px-4">
+            👤 Subir documentos – Inquilino
+          </a>
+        </div>
+      </div>
     </div>
-    <div class="documentos-col inquilino">
-     <h3>
-      👤 Inquilino (Arrendatario)
-     </h3>
-     <ul>
-      <li>
-       🪪 Identificación oficial
-      </li>
-      <li>
-       🏠 Comprobante de domicilio
-      </li>
-      <li>
-       💰 Comprobante de ingresos
-      </li>
-      <li>
-       📝 Solicitud de arrendamiento
-      </li>
-      <li>
-       🧾 Aval
-      </li>
-     </ul>
-    </div>
-   </div>
   </section>
+
   <!-- POR QUÉ CONTRATARNOS -->
   <section class="seccion fondo-marca" id="porque-nosotros">
    <div class="porque-wrap">
