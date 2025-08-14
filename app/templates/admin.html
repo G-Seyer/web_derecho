@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <title>Administración – Folios y pólizas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f6f7fb; }
+    .card { border:0; box-shadow: 0 6px 24px rgba(0,0,0,.06); }
+    .status-pill { font-size:.85rem; padding:.25rem .5rem; border-radius:999px; }
+  </style>
+</head>
+<body>
+<nav class="navbar navbar-dark bg-dark mb-4">
+  <div class="container">
+    <a class="navbar-brand" href="/">AEPRA – Admin</a>
+  </div>
+</nav>
+
+<main class="container pb-5">
+  <h1 class="mb-4">Administración de procesos por folio</h1>
+
+  <!-- Buscador -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <form id="frmSearch" class="row g-2">
+        <div class="col-md-6">
+          <label class="form-label">Folio</label>
+          <input id="folio" class="form-control" placeholder="AEPRA-202508-AB12" required
+                 pattern="^AEPRA-\d{6}-[A-Z0-9]{4}$">
+          <div class="form-text">Formato: AEPRA-YYYYMM-XXXX.</div>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <button type="submit" class="btn btn-primary">Buscar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Resumen -->
+  <div id="boxResumen" class="card mb-4 d-none">
+    <div class="card-body">
+      <h5 class="mb-3">Resumen del folio <span id="resFolio" class="text-primary"></span></h5>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <div class="p-3 bg-light rounded">
+            <div class="fw-semibold">Docs. Arrendador</div>
+            <div id="resArrendador" class="fs-4">0</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="p-3 bg-light rounded">
+            <div class="fw-semibold">Docs. Arrendatario</div>
+            <div id="resArrendatario" class="fs-4">0</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="p-3 bg-light rounded">
+            <div class="fw-semibold">Total documentos</div>
+            <div id="resTotal" class="fs-4">0</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="p-3 bg-light rounded">
+            <div class="fw-semibold">Última subida</div>
+            <div id="resUltima" class="fs-6">–</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Póliza -->
+  <div id="boxPoliza" class="card mb-4 d-none">
+    <div class="card-body">
+      <h5 class="mb-3">Póliza</h5>
+      <form id="frmPoliza" class="row g-2">
+        <div class="col-md-3">
+          <label class="form-label">Fecha de inicio</label>
+          <input type="date" id="polInicio" class="form-control" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Vencimiento</label>
+          <input type="date" id="polFin" class="form-control" disabled>
+          <div class="form-text">Se calcula a 1 año.</div>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <button class="btn btn-success" type="submit">Guardar póliza</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Tabla de documentos -->
+  <div id="boxDocs" class="card d-none">
+    <div class="card-body">
+      <h5 class="mb-3">Documentos del folio</h5>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th>Tipo usuario</th>
+              <th>Tipo documento</th>
+              <th>Nombre</th>
+              <th>MIME</th>
+              <th>Tamaño</th>
+              <th>Ruta</th>
+              <th>Subido</th>
+            </tr>
+          </thead>
+          <tbody id="tbDocs">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const fmtBytes = n => (n==null)?'–': new Intl.NumberFormat('es-MX').format(n) + ' B';
+
+document.getElementById('frmSearch').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const folio = document.getElementById('folio');
+  if (!folio.checkValidity()) { folio.reportValidity(); return; }
+
+  const url = `/api/admin/folio/${folio.value.trim()}`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  // Resumen
+  const resumen = data.resumen;
+  if (resumen) {
+    document.getElementById('boxResumen').classList.remove('d-none');
+    document.getElementById('resFolio').textContent = resumen.folio;
+    document.getElementById('resArrendador').textContent = resumen.docs_arrendador;
+    document.getElementById('resArrendatario').textContent = resumen.docs_arrendatario;
+    document.getElementById('resTotal').textContent = resumen.total_docs;
+    document.getElementById('resUltima').textContent = resumen.ultima_subida || '–';
+  } else {
+    document.getElementById('boxResumen').classList.add('d-none');
+  }
+
+  // Póliza
+  document.getElementById('boxPoliza').classList.remove('d-none');
+  if (data.poliza) {
+    document.getElementById('polInicio').value = data.poliza.fecha_inicio;
+    document.getElementById('polFin').value = data.poliza.fecha_fin;
+  } else {
+    document.getElementById('polInicio').value = '';
+    document.getElementById('polFin').value = '';
+  }
+
+  // Documentos
+  const tb = document.getElementById('tbDocs');
+  tb.innerHTML = '';
+  (data.documentos || []).forEach(d => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${d.tipo_usuario}</td>
+      <td>${d.tipo_documento}</td>
+      <td>${d.nombre_archivo || '–'}</td>
+      <td>${d.mime || '–'}</td>
+      <td>${fmtBytes(d.tamano_bytes)}</td>
+      <td>${d.ruta ? `<small>${d.ruta}</small>` : '–'}</td>
+      <td>${d.fecha_subida || '–'}</td>
+    `;
+    tb.appendChild(tr);
+  });
+  document.getElementById('boxDocs').classList.remove('d-none');
+});
+
+// Calcula fin a un año al cambiar inicio
+document.getElementById('polInicio').addEventListener('change', () => {
+  const v = document.getElementById('polInicio').value;
+  if (!v) { document.getElementById('polFin').value = ''; return; }
+  const d = new Date(v);
+  const ffin = new Date(d);
+  ffin.setFullYear(d.getFullYear() + 1);
+  document.getElementById('polFin').value = ffin.toISOString().slice(0,10);
+});
+
+// Guardar póliza
+document.getElementById('frmPoliza').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const folio = document.getElementById('resFolio').textContent.trim();
+  const fi = document.getElementById('polInicio').value;
+  if (!folio || !fi) return;
+  const res = await fetch('/api/admin/poliza', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({folio, fecha_inicio: fi})
+  });
+  const out = await res.json();
+  if (out.ok) {
+    document.getElementById('polInicio').value = out.fecha_inicio;
+    document.getElementById('polFin').value = out.fecha_fin;
+    alert('Póliza guardada');
+  } else {
+    alert(out.error || 'Error guardando póliza');
+  }
+});
+</script>
+</body>
+</html>

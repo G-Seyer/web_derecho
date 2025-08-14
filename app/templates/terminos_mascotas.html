@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Términos – Póliza para Mascotas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-dark bg-dark mb-4">
+  <div class="container">
+    <a class="navbar-brand" href="{{ url_for('routes.home') }}">AEPRA</a>
+  </div>
+</nav>
+
+<main class="container">
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+      <h1 class="h4 mb-3">Póliza para Mascotas – Términos y Condiciones</h1>
+      <p class="text-muted">Versión preliminar. Sustituye este texto por tus términos oficiales.</p>
+
+      <h5>Resumen</h5>
+      <ul>
+        <li>Cobertura de daños ocasionados por mascotas al inmueble arrendado.</li>
+        <li>Aplicable durante la vigencia de la póliza del contrato de arrendamiento.</li>
+        <li>Montos y deducibles conforme a la contratación (detalla aquí tus límites).</li>
+      </ul>
+
+      <h5>Requisitos</h5>
+      <ul>
+        <li>Identificación del arrendatario y propietario.</li>
+        <li>Datos del inmueble y contrato de arrendamiento.</li>
+        <li>Declaración de especie, raza y talla de la mascota.</li>
+      </ul>
+
+      <h5>Exclusiones generales</h5>
+      <ul>
+        <li>Daños no atribuibles a la mascota asegurada.</li>
+        <li>Daños preexistentes a la contratación.</li>
+        <li>Actos dolosos o negligencia grave (amplía tus exclusiones reales).</li>
+      </ul>
+
+      <h5>Montos asegurados</h5>
+      <p>Define aquí tus rangos/montos máximos, deducibles y, si aplica, coaseguros.</p>
+
+      <div class="mt-4">
+        <a href="{{ url_for('routes.home') }}" class="btn btn-primary">Volver al inicio</a>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

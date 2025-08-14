@@ -22,6 +22,31 @@
     <a href="/#servicios">Servicios</a>
     <a href="/privacidad">Políticas</a>
   </nav>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="container mt-3" id="flash-container">
+      {% for category, message in messages %}
+        <div class="alert alert-{{ 'success' if category=='success' else category }} alert-dismissible fade show shadow-sm" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+        </div>
+      {% endfor %}
+    </div>
+    <script>
+      setTimeout(() => {
+        document.querySelectorAll('#flash-container .alert').forEach(alert => {
+          if (typeof bootstrap !== 'undefined' && bootstrap.Alert) {
+            bootstrap.Alert.getOrCreateInstance(alert).close();
+          } else {
+            alert.remove();
+          }
+        });
+      }, 4000); // Se cierra en 4 segundos
+    </script>
+  {% endif %}
+{% endwith %}
+
+
 </header>
 
 <!-- HERO con título y botón -->
@@ -142,7 +167,7 @@
    <div class="porque-wrap">
     <div class="contenedor-central">
      <div class="porque-img">
-      <img alt="Acuerdo legal" src="{{ url_for('static', filename='img/acuerdo.png') }}"/>
+      <img alt="Acuerdo legal" src="{{ url_for('static', filename='img/acuerdo.jpg') }}"/>
      </div>
      <div class="porque-texto">
       <h2>
@@ -241,6 +266,61 @@
      </a>
     </div>
    </div>
+   <!-- Póliza para Mascotas -->
+<section id="poliza-mascotas" class="container my-5">
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+      <h2 class="h4 mb-2">Póliza para Mascotas</h2>
+      <p class="mb-3">
+        Con esta podrás arrendar un inmueble con tranquilidad para el propietario del bien; 
+        si la mascota causa algún desperfecto, será cubierto por la póliza.
+      </p>
+
+      <!-- Mini formulario para personalizar el WhatsApp -->
+      <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label">Nombre (opcional)</label>
+          <input id="pm_nombre" type="text" class="form-control" placeholder="Tu nombre">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Folio (opcional)</label>
+          <input id="pm_folio" type="text" class="form-control" placeholder="AEPRA-YYYYMM-XXXX">
+        </div>
+        <div class="col-md-4 d-flex gap-2">
+          <a href="{{ url_for('routes.terminos_mascotas') }}" class="btn btn-outline-secondary flex-fill">
+            Ver términos y montos
+          </a>
+          <button id="btnWApm" class="btn btn-success flex-fill" type="button">
+            Consultar por WhatsApp
+          </button>
+        </div>
+      </div>
+
+      <small class="text-muted d-block mt-2">
+        *Consulta términos y condiciones y montos asegurados.
+      </small>
+    </div>
+  </div>
+</section>
+
+<script>
+const PM_WHATS_NUMBER = "5551882212";
+
+document.getElementById('btnWApm')?.addEventListener('click', () => {
+  const nombre = (document.getElementById('pm_nombre')?.value || "").trim();
+  const folio  = (document.getElementById('pm_folio')?.value  || "").trim().toUpperCase();
+
+  // Mensaje base
+  let text = "Hola, quiero información de la *Póliza para Mascotas*.";
+  if (nombre) text += `\nNombre: ${nombre}`;
+  if (folio)  text += `\nFolio: ${folio}`;
+  text += "\n¿Podrían compartirme términos, condiciones y montos asegurados?";
+
+  const url = `https://wa.me/${PM_WHATS_NUMBER}?text=${encodeURIComponent(text)}`;
+  window.open(url, '_blank');
+});
+</script>
+
   </section>
   <!-- PREGUNTAS FRECUENTES -->
   <section class="seccion fondo-marca" id="faq">

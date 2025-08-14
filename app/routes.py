@@ -1,267 +1,342 @@
-# routes.py
 import os
-import time
-import smtplib
-from email.mime.text import MIMEText
-
-import boto3
-from botocore.client import Config
-
-from flask import Blueprint, request, redirect, render_template, current_app
-from sqlalchemy import text
-from werkzeug.utils import secure_filename
-
-from app import db
-from app.models import Contacto
-
-main = Blueprint('main', __name__)
-
-# =========================
-# S3 (documentos)
-# =========================
-s3 = boto3.client(
-    "s3",
-    region_name=os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_S3_REGION_NAME"),
-    config=Config(signature_version="s3v4"),
+import re
+import mimetypes
+from datetime import date
+from flask import (
+    Blueprint, render_template, request, redirect, url_for,
+    flash, jsonify, current_app as app
 )
-BUCKET = os.getenv("S3_BUCKET_NAME") or os.getenv("S3_BUCKET")
-PREFIX = os.getenv("S3_PREFIX", "")  # opcional, ej. "aepra/"
+from sqlalchemy import text
+import boto3
+from botocore.exceptions import BotoCoreError, NoCredentialsError, ClientError
 
-# =========================
-# Helpers (documentos)
-# =========================
-def _valida_gmail(correo: str) -> bool:
-    return correo.strip().lower().endswith("@gmail.com")
+# Si tu app usa SQLAlchemy en app/__init__.py:
+#   from app import db
+# y aquí lo importas:
+from app import db
 
-def _allowed(filename: str) -> bool:
-    if not filename or "." not in filename:
-        return False
-    ext = filename.rsplit(".", 1)[1].lower()
-    return ext in current_app.config.get("ALLOWED_EXTENSIONS", {"pdf","jpg","jpeg","png","webp"})
 
-def _save_file(file_storage, carpeta: str, user_id: int, clave: str):
-    """
-    Sube a s3://<BUCKET>/<PREFIX><carpeta>/<user_id>/<nombre>_<clave>_<ts>.<ext>
-    Retorna (s3_key, tamano_bytes, mimetype)
-    """
-    if not BUCKET:
-        raise RuntimeError("S3_BUCKET_NAME (o S3_BUCKET) no está configurado")
+# =============== Utilidades S3 ===============
 
-    ts = time.strftime("%Y%m%d-%H%M%S")
-    name, ext = os.path.splitext(file_storage.filename)
-    safe = (secure_filename(name) or "archivo")[:50]
-    filename = f"{safe}_{clave}_{ts}{ext.lower()}"
+def _get_s3_client():
+    aws_key = os.getenv("AWS_ACCESS_KEY_ID")
+    aws_sec = os.getenv("AWS_SECRET_ACCESS_KEY")
+    region  = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
 
-    key = f"{PREFIX}{carpeta}/{user_id}/{filename}"
+    if not aws_key or not aws_sec:
+        raise RuntimeError("AWS credentials missing (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY).")
 
-    file_storage.stream.seek(0)
-    s3.upload_fileobj(
-        Fileobj=file_storage.stream,
-        Bucket=BUCKET,
-        Key=key,
-        ExtraArgs={"ContentType": file_storage.mimetype or "application/octet-stream"},
+    return boto3.client(
+        "s3",
+        aws_access_key_id=aws_key,
+        aws_secret_access_key=aws_sec,
+        region_name=region
     )
 
-    size = getattr(file_storage, "content_length", None) or 0
-    mime = (file_storage.mimetype or None)
-    return key, size, mime
 
+def _save_file_to_s3(*, file_storage, folder: str, public: bool = True):
+    """
+    Sube un FileStorage a S3 dentro de la carpeta indicada.
+    Devuelve (ruta, mime, size). 'ruta' será la URL pública (si public=True) o la key s3://bucket/key.
+    """
+    bucket = os.getenv("S3_BUCKET_NAME") or os.getenv("S3_BUCKET")
+    if not bucket:
+        raise RuntimeError("S3_BUCKET_NAME (o S3_BUCKET) no está configurado")
 
-# =========================
-# Páginas públicas
-# =========================
-@main.route("/")
-def inicio():
-    return render_template("index.html")
+    s3 = _get_s3_client()
 
-@main.route("/contacto")
-def contacto():
-    return render_template("contacto.html")
+    filename = file_storage.filename
+    raw = file_storage.read()
+    size = len(raw)
 
-@main.route("/privacidad")
-def privacidad():
-    return render_template("privacidad.html")
+    mime = mimetypes.guess_type(filename)[0] or file_storage.mimetype or "application/octet-stream"
+    key  = f"{folder.strip('/')}/{filename}"
 
-# =========================
-# Formularios separados (GET)
-# =========================
-@main.route("/documentos/propietario", methods=["GET"])
-def documentos_propietario():
-    return render_template("documentos_propietario.html")
-
-@main.route("/documentos/inquilino", methods=["GET"])
-def documentos_inquilino():
-    return render_template("documentos_inquilino.html")
-
-# =========================
-# Recepción (POST) – guardar en S3 + DB
-# =========================
-@main.route("/documentos/propietario", methods=["POST"])
-def subir_propietario():
-    f = request.form
-    files = request.files
-
-    nombre = f.get("nombre", "").strip()
-    correo = f.get("correo", "").strip()
-    direccion = f.get("direccion", "").strip()
-
-    if not (nombre and correo and direccion):
-        return "Faltan campos obligatorios.", 400
-    if not _valida_gmail(correo):
-        return "El correo debe terminar en @gmail.com", 400
-
-    req = {
-        "identificacion":        files.get("identificacion"),
-        "comprobante_domicilio": files.get("comprobante_domicilio"),
-        "escritura":             files.get("escritura"),
-        "contrato_poder":        files.get("contrato_poder"),
-        "folio_real":            files.get("folio_real"),
-    }
-    for k, fs in req.items():
-        if not fs or fs.filename == "":
-            return f"Falta archivo: {k}", 400
-        if not _allowed(fs.filename):
-            return f"Extensión no permitida en: {k}", 400
+    extra = {"ContentType": mime}
+    if public:
+        extra["ACL"] = "public-read"
 
     try:
-        # 1) Inserta arrendador
-        arr_id = db.session.execute(text("""
-            INSERT INTO arrendadores (nombre, correo, direccion)
-            VALUES (:n, :c, :d)
-            RETURNING id
-        """), dict(n=nombre, c=correo, d=direccion)).scalar()
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=raw,
+            **extra
+        )
+    except (BotoCoreError, NoCredentialsError, ClientError) as e:
+        raise RuntimeError(f"Error subiendo a S3: {e}")
 
-        # 2) Sube archivos a S3 y registra en documentos
-        for clave, fs in req.items():
-            ruta, size, mime = _save_file(fs, "arrendador", arr_id, clave)
-            db.session.execute(text("""
-                INSERT INTO documentos (tipo_usuario, usuario_id, tipo_documento, ruta, nombre_archivo, mime, tamano_bytes)
-                VALUES ('arrendador', :uid, :tipo, :ruta, :nombre, :mime, :size)
-                ON CONFLICT (tipo_usuario, usuario_id, tipo_documento) DO UPDATE
-                SET ruta=EXCLUDED.ruta,
-                    nombre_archivo=EXCLUDED.nombre_archivo,
-                    mime=EXCLUDED.mime,
-                    tamano_bytes=EXCLUDED.tamano_bytes,
-                    fecha_subida=now();
-            """), dict(uid=arr_id, tipo=clave, ruta=ruta, nombre=fs.filename, mime=mime, size=size))
+    ruta = f"https://{bucket}.s3.amazonaws.com/{key}" if public else f"s3://{bucket}/{key}"
+    return ruta, mime, size
 
-        db.session.commit()
-        return f"✅ Documentos del PROPIETARIO guardados. ID={arr_id}", 200
 
+# =============== Helpers de BD ===============
+
+def _insert_document_with_folio(*, folio, tipo_usuario, usuario_id, tipo_documento, ruta, nombre_archivo, mime, size):
+    """
+    Inserta/actualiza en public.documentos incluyendo el FOLIO.
+    Requiere índice único por (tipo_usuario, usuario_id, tipo_documento) para el ON CONFLICT.
+    """
+    sql = text("""
+        INSERT INTO public.documentos
+          (folio, tipo_usuario, usuario_id, tipo_documento, ruta, nombre_archivo, mime, tamano_bytes)
+        VALUES
+          (:folio, :tipo_usuario, :usuario_id, :tipo_documento, :ruta, :nombre_archivo, :mime, :size)
+        ON CONFLICT (tipo_usuario, usuario_id, tipo_documento) DO UPDATE
+        SET ruta           = EXCLUDED.ruta,
+            nombre_archivo = EXCLUDED.nombre_archivo,
+            mime           = EXCLUDED.mime,
+            tamano_bytes   = EXCLUDED.tamano_bytes,
+            fecha_subida   = now(),
+            folio          = EXCLUDED.folio;
+    """)
+    db.session.execute(sql, dict(
+        folio=folio,
+        tipo_usuario=tipo_usuario,
+        usuario_id=usuario_id,
+        tipo_documento=tipo_documento,
+        ruta=ruta,
+        nombre_archivo=nombre_archivo,
+        mime=mime,
+        size=size
+    ))
+
+
+def _get_or_create_usuario_id_por_folio(*, tabla: str, folio: str):
+    """
+    Intenta crear (si no existe) un registro marcador por folio y devuelve el id.
+    Requiere que {tabla}.folio sea UNIQUE para que el ON CONFLICT funcione.
+    """
+    sql = text(f"""
+        INSERT INTO public.{tabla} (folio)
+        VALUES (:folio)
+        ON CONFLICT (folio) DO UPDATE SET folio = EXCLUDED.folio
+        RETURNING id;
+    """)
+    row = db.session.execute(sql, {"folio": folio}).first()
+    return row[0]
+
+
+# =============== Blueprints/Rutas ===============
+
+bp = Blueprint("routes", __name__)
+
+
+@bp.route("/")
+def home():
+    return render_template("index.html")
+
+
+# ---------- Verificación simple del folio (AJAX de los formularios) ----------
+@bp.get("/api/verificar-folio/<folio>")
+def api_verificar_folio(folio):
+    # Ajusta el patrón si tu formato cambia
+    ok = re.match(r"^AEPRA-\d{6}-[A-Z0-9]{4}$", folio or "") is not None
+    return jsonify({"ok": ok})
+
+
+# ================== FORMULARIO PROPIETARIO ==================
+
+
+@bp.route("/documentos/propietario", methods=["GET", "POST"])
+def subir_propietario():
+    if request.method == "GET":
+        return render_template("documentos_propietario.html")
+
+    form = request.form
+    folio = (form.get("folio") or "").strip()
+
+    if not re.match(r"^AEPRA-\d{6}-[A-Z0-9]{4}$", folio):
+        return "Folio inválido", 400
+
+    try:
+        arr_id = _get_or_create_usuario_id_por_folio(tabla="arrendadores", folio=folio)
     except Exception as e:
         db.session.rollback()
         return f"Error guardando propietario: {e}", 500
 
-@main.route("/documentos/inquilino", methods=["POST"])
-def subir_inquilino():
-    f = request.form
-    files = request.files
-
-    nombre = f.get("nombre", "").strip()
-    correo = f.get("correo", "").strip()
-    direccion = f.get("direccion", "").strip()
-
-    if not (nombre and correo and direccion):
-        return "Faltan campos obligatorios.", 400
-    if not _valida_gmail(correo):
-        return "El correo debe terminar en @gmail.com", 400
-
-    req = {
-        "identificacion":          files.get("identificacion"),
-        "comprobante_domicilio":   files.get("comprobante_domicilio"),
-        "comprobante_ingresos":    files.get("comprobante_ingresos"),
-        "solicitud_arrendamiento": files.get("solicitud_arrendamiento"),
-        "aval":                    files.get("aval"),
-    }
-    for k, fs in req.items():
-        if not fs or fs.filename == "":
-            return f"Falta archivo: {k}", 400
-        if not _allowed(fs.filename):
-            return f"Extensión no permitida en: {k}", 400
-
     try:
-        # 1) Inserta arrendatario
-        inq_id = db.session.execute(text("""
-            INSERT INTO arrendatarios (nombre, correo, direccion)
-            VALUES (:n, :c, :d)
-            RETURNING id
-        """), dict(n=nombre, c=correo, d=direccion)).scalar()
+        for clave, fs in request.files.items():
+            if not fs or fs.filename == "":
+                continue
 
-        # 2) Sube archivos a S3 y registra en documentos
-        for clave, fs in req.items():
-            ruta, size, mime = _save_file(fs, "arrendatario", inq_id, clave)
-            db.session.execute(text("""
-                INSERT INTO documentos (tipo_usuario, usuario_id, tipo_documento, ruta, nombre_archivo, mime, tamano_bytes)
-                VALUES ('arrendatario', :uid, :tipo, :ruta, :nombre, :mime, :size)
-                ON CONFLICT (tipo_usuario, usuario_id, tipo_documento) DO UPDATE
-                SET ruta=EXCLUDED.ruta,
-                    nombre_archivo=EXCLUDED.nombre_archivo,
-                    mime=EXCLUDED.mime,
-                    tamano_bytes=EXCLUDED.tamano_bytes,
-                    fecha_subida=now();
-            """), dict(uid=inq_id, tipo=clave, ruta=ruta, nombre=fs.filename, mime=mime, size=size))
+            ruta, mime, size = _save_file_to_s3(
+                file_storage=fs,
+                folder=f"arrendador/{folio}/{arr_id}",
+                public=True
+            )
+
+            _insert_document_with_folio(
+                folio=folio,
+                tipo_usuario="arrendador",
+                usuario_id=arr_id,
+                tipo_documento=clave,
+                ruta=ruta,
+                nombre_archivo=fs.filename,
+                mime=mime,
+                size=size
+            )
 
         db.session.commit()
-        return f"✅ Documentos del INQUILINO guardados. ID={inq_id}", 200
+    except Exception as e:
+        db.session.rollback()
+        return f"Error guardando propietario: {e}", 500
 
+    flash("✅ Documentos del propietario guardados correctamente.", "success")
+    return redirect(url_for("routes.home"))  # 🔹 ahora vuelve al inicio
+
+# ================== FORMULARIO INQUILINO ==================
+
+@bp.route("/documentos/inquilino", methods=["GET", "POST"])
+def subir_inquilino():
+    if request.method == "GET":
+        return render_template("documentos_inquilino.html")
+
+    form = request.form
+    folio = (form.get("folio") or "").strip()
+
+    if not re.match(r"^AEPRA-\d{6}-[A-Z0-9]{4}$", folio):
+        return "Folio inválido", 400
+
+    try:
+        inq_id = _get_or_create_usuario_id_por_folio(tabla="arrendatarios", folio=folio)
     except Exception as e:
         db.session.rollback()
         return f"Error guardando inquilino: {e}", 500
 
-# =========================
-# Formulario de contacto
-# =========================
-def enviar_correo(nombre, correo, telefono, mensaje):
-    cuerpo = f"""
-    Nuevo mensaje desde el formulario de contacto:
-
-    Nombre: {nombre}
-    Correo: {correo}
-    Teléfono: {telefono}
-    Mensaje:
-    {mensaje}
-    """
-    msg = MIMEText(cuerpo)
-    msg['Subject'] = "Nuevo mensaje desde la página web"
-    msg['From'] = os.getenv("EMAIL_USER"); msg['To'] = os.getenv("EMAIL_USER")
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-        smtp.login(os.getenv("EMAIL_USER"), os.getenv("EMAIL_PASS"))
-        smtp.send_message(msg)
-
-@main.route("/guardar_contacto", methods=["POST"])
-def guardar_contacto():
     try:
-        nombre = request.form.get("nombre")
-        correo = request.form.get("correo")
-        telefono = request.form.get("telefono")
-        mensaje = request.form.get("mensaje")
-        nuevo = Contacto(nombre=nombre, correo=correo, telefono=telefono, mensaje=mensaje)
-        db.session.add(nuevo); db.session.commit()
-        enviar_correo(nombre, correo, telefono, mensaje)
-        return redirect("/gracias")
-    except Exception as e:
-        print("❌ ERROR al guardar o enviar correo:", e)
-        return "Error interno del servidor", 500
+        for clave, fs in request.files.items():
+            if not fs or fs.filename == "":
+                continue
 
-@main.route('/gracias')
-def gracias():
-    return """
-    <html>
-      <head><meta http-equiv="refresh" content="4; url=/" /></head>
-      <body>
-        <h2>Gracias por contactarnos. Te responderemos pronto.</h2>
-        <p>Serás redirigido al inicio automáticamente...</p>
-      </body>
-    </html>
+            ruta, mime, size = _save_file_to_s3(
+                file_storage=fs,
+                folder=f"arrendatario/{folio}/{inq_id}",
+                public=True
+            )
+
+            _insert_document_with_folio(
+                folio=folio,
+                tipo_usuario="arrendatario",
+                usuario_id=inq_id,
+                tipo_documento=clave,
+                ruta=ruta,
+                nombre_archivo=fs.filename,
+                mime=mime,
+                size=size
+            )
+
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return f"Error guardando inquilino: {e}", 500
+
+    flash("✅ Documentos del inquilino guardados correctamente.", "success")
+    return redirect(url_for("routes.home"))  # 🔹 ahora vuelve al inicio
+
+
+# ================== ADMIN ==================
+
+@bp.route("/admin")
+def admin_home():
+    return render_template("admin.html")
+
+
+@bp.get("/api/admin/folio/<folio>")
+def api_admin_folio(folio):
     """
+    Devuelve:
+      - resumen (v_documentos_resumen)
+      - documentos (v_documentos_por_folio)
+      - póliza (polizas)
+    """
+    conn = db.session.connection()
+    cur  = conn.execute(text("""
+        SELECT folio, docs_arrendador, docs_arrendatario, total_docs,
+               primera_subida, ultima_subida
+        FROM public.v_documentos_resumen
+        WHERE folio = :folio
+    """), {"folio": folio})
 
-# =========================
-# Healthcheck simple DB
-# =========================
-@main.route("/dbcheck")
-def dbcheck():
+    row = cur.fetchone()
+    resumen = None
+    if row:
+        resumen = {
+            "folio": row[0],
+            "docs_arrendador": row[1],
+            "docs_arrendatario": row[2],
+            "total_docs": row[3],
+            "primera_subida": row[4].isoformat() if row[4] else None,
+            "ultima_subida":  row[5].isoformat() if row[5] else None,
+        }
+
+    cur = conn.execute(text("""
+        SELECT tipo_usuario, tipo_documento, nombre_archivo,
+               COALESCE(mime, content_type) AS mime,
+               tamano_bytes, ruta, fecha_subida
+        FROM public.v_documentos_por_folio
+        WHERE folio = :folio
+        ORDER BY fecha_subida DESC, tipo_usuario, tipo_documento
+    """), {"folio": folio})
+    documentos = []
+    for r in cur.fetchall():
+        documentos.append({
+            "tipo_usuario": r[0],
+            "tipo_documento": r[1],
+            "nombre_archivo": r[2],
+            "mime": r[3],
+            "tamano_bytes": int(r[4]) if r[4] is not None else None,
+            "ruta": r[5],
+            "fecha_subida": r[6].isoformat() if r[6] else None,
+        })
+
+    cur = conn.execute(text("""
+        SELECT fecha_inicio, fecha_fin
+        FROM public.polizas
+        WHERE folio = :folio
+    """), {"folio": folio})
+    poliza = None
+    row = cur.fetchone()
+    if row:
+        poliza = {"fecha_inicio": row[0].isoformat(), "fecha_fin": row[1].isoformat()}
+
+    return jsonify({"resumen": resumen, "documentos": documentos, "poliza": poliza})
+
+
+@bp.post("/api/admin/poliza")
+def api_admin_set_poliza():
+    """
+    Guarda/actualiza la póliza para un folio.
+    fecha_fin = fecha_inicio + 1 año.
+    """
+    data = request.get_json(silent=True) or request.form
+    folio = (data.get("folio") or "").strip()
+    finicio = (data.get("fecha_inicio") or "").strip()
+
+    if not folio or not finicio:
+        return jsonify({"ok": False, "error": "Folio y fecha_inicio son requeridos"}), 400
+
     try:
-        now = db.session.execute(text("SELECT now()")).scalar()
-        return f"OK DB {now}"
-    except Exception as e:
-        return f"DB error: {e}", 500
+        y, m, d = map(int, finicio.split("-"))
+        fi = date(y, m, d)
+        ff = date(y + 1, m, d)
+    except Exception:
+        return jsonify({"ok": False, "error": "fecha_inicio inválida (YYYY-MM-DD)"}), 400
+
+    db.session.execute(text("""
+        INSERT INTO public.polizas (folio, fecha_inicio, fecha_fin)
+        VALUES (:folio, :fi, :ff)
+        ON CONFLICT (folio) DO UPDATE
+        SET fecha_inicio = EXCLUDED.fecha_inicio,
+            fecha_fin    = EXCLUDED.fecha_fin
+    """), {"folio": folio, "fi": fi, "ff": ff})
+    db.session.commit()
+
+    return jsonify({"ok": True, "folio": folio, "fecha_inicio": fi.isoformat(), "fecha_fin": ff.isoformat()})
+
+# ================== ADMIN ==================
+
+
+@bp.route("/terminos-mascotas")
+def terminos_mascotas():
+    return render_template("terminos_mascotas.html")

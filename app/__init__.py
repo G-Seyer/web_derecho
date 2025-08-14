@@ -15,29 +15,30 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # ---------- Subidas de archivos (disco) ----------
-    # /.../web_derecho/uploads
+    # Clave secreta para sesiones y mensajes flash
+    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-change-me')
+
+    # ---------- Subidas de archivos (disco local) ----------
     base_dir = os.path.dirname(os.path.abspath(__file__))
     upload_dir = os.path.abspath(os.path.join(base_dir, "..", "uploads"))
     os.makedirs(upload_dir, exist_ok=True)
 
     app.config["UPLOAD_FOLDER"] = upload_dir
     app.config["ALLOWED_EXTENSIONS"] = {"pdf", "jpg", "jpeg", "png", "webp"}
-    # Límite de 25 MB por request (ajústalo si lo necesitas)
-    app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
+    app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB
 
-    # ---------- Extensiones ----------
+    # ---------- Inicializar extensiones ----------
     db.init_app(app)
     mail.init_app(app)
 
-    # ---------- Blueprints ----------
-    from app.routes import main
-    app.register_blueprint(main)
+    # ---------- Registrar blueprint ----------
+    from .routes import bp as routes_bp
+    app.register_blueprint(routes_bp)
 
-    # Cargar modelos
+    # Importar modelos para que SQLAlchemy los reconozca
     from app import models
 
     return app
 
-# Instancia global para WSGI (gunicorn / flask run)
+# Instancia global para WSGI / Render
 app = create_app()

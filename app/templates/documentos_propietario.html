@@ -1,179 +1,348 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Subir documentos – Propietario</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}?v=3">
+  <meta charset="utf-8" />
+  <title>Subir documentos – Propietario (Arrendador)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f6f7fb; }
+    .card { box-shadow: 0 6px 24px rgba(0,0,0,.06); border:0; }
+    .req-dot { color:#0d6efd; font-weight:700; }
+    .small-hint { font-size:.8rem; color:#6c757d; }
+    .file-ok { color:#198754; }
+    .file-miss { color:#dc3545; }
+  </style>
 </head>
 <body>
-<header class="barra-superior solid">
-  <div class="menu-links" id="menu">
-    <a href="/">Inicio</a>
-    <a href="/#servicios">Servicios</a>
-    <a href="/contacto">Contacto</a>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container">
+    <a class="navbar-brand" href="/">AEPRA</a>
+    <div class="collapse navbar-collapse">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item"><a class="nav-link" href="/">Inicio</a></li>
+        <li class="nav-item"><a class="nav-link" href="/#servicios">Servicios</a></li>
+        <li class="nav-item"><a class="nav-link" href="/#contacto">Contacto</a></li>
+      </ul>
+    </div>
   </div>
-</header>
+</nav>
 
-<div class="container page-docs py-4">
-  <h1 class="mb-4">Subir documentos – Propietario (Arrendador)</h1>
+<main class="py-5">
+  <div class="container">
+    <h1 class="mb-4 fw-semibold">Subir documentos – Propietario (Arrendador)</h1>
 
-  <form method="POST" action="{{ url_for('main.subir_propietario') }}" enctype="multipart/form-data" id="form-propietario">
-    <div class="row g-3 mb-3">
-      <div class="col-md-6">
-        <label class="form-label">Nombre completo</label>
-        <input type="text" name="nombre" class="form-control" required>
-      </div>
-      <div class="col-md-6">
-        <label class="form-label">Correo electrónico</label>
-        <input type="email" name="correo" class="form-control" required>
-        <div class="form-text">
-          Usa un correo <code>@gmail.com</code>. Te avisaremos si falta “@gmail.com”.
+    <form id="formProp" class="needs-validation" novalidate method="post" enctype="multipart/form-data" action="/documentos/propietario">
+
+      <!-- Folio -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <label class="form-label">Folio asignado <span class="req-dot">*</span></label>
+          <div class="d-flex gap-2 flex-wrap">
+            <input id="folio" name="folio" type="text" class="form-control" style="max-width:320px"
+                   placeholder="AEPRA-202508-AB12"
+                   pattern="^AEPRA-\d{6}-[A-Z0-9]{4}$" required>
+            <button type="button" id="btnCheckFolio" class="btn btn-primary">Verificar folio</button>
+            <span id="folioMsg" class="align-self-center small-hint"></span>
+          </div>
+          <div class="form-text small-hint">Formato: AEPRA-YYYYMM-XXXX (letras y números en mayúsculas).</div>
+          <input type="hidden" id="folio_ok" value="0">
         </div>
       </div>
-    </div>
 
-    <!-- Dirección del inmueble (una sola línea) -->
-    <div class="mb-3">
-      <label class="form-label">Dirección del inmueble</label>
-      <input type="text" name="direccion" class="form-control"
-             placeholder="Calle Número Colonia (en ese orden)"
-             required
-             pattern="^\s*\S+(?:\s+\S+)*\s+\d+[\w/-]*\s+\S+(?:\s+\S+)*\s*$">
-      <div class="form-text">
-        Escribe la <strong>dirección del inmueble</strong> en el orden:
-        <em>Calle Número Colonia</em>. Ejemplo: <code>Insurgentes Sur 716 Del Valle</code>.
-      </div>
-    </div>
-
-    <div class="doc-grid">
-      <!-- Identificación -->
-      <div class="doc-card" data-field="identificacion">
-        <div class="doc-emoji">🪪</div>
-        <div class="doc-title">Identificación oficial</div>
-        <div class="doc-upload">
-          <input id="identificacion" type="file" name="identificacion" accept=".pdf,image/*" required>
-          <label for="identificacion">Seleccionar archivo</label>
+      <!-- Datos básicos -->
+      <div class="card mb-4">
+        <div class="card-body row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Nombre completo <span class="req-dot">*</span></label>
+            <input type="text" name="nombre" class="form-control" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">E-mail <span class="req-dot">*</span></label>
+            <input type="email" name="correo" class="form-control"
+                   pattern="^[^@\s]+@gmail\.com$" placeholder="usuario@gmail.com" required>
+            <div class="form-text small-hint">Usa un correo <strong>@gmail.com</strong>.</div>
+          </div>
         </div>
-        <div class="doc-file small text-secondary mt-1">Sin archivo</div>
-        <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
-      <!-- Comprobante de domicilio -->
-      <div class="doc-card" data-field="comprobante_domicilio">
-        <div class="doc-emoji">🏠</div>
-        <div class="doc-title">Comprobante de domicilio</div>
-        <div class="doc-upload">
-          <input id="comprobante_domicilio" type="file" name="comprobante_domicilio" accept=".pdf,image/*" required>
-          <label for="comprobante_domicilio">Seleccionar archivo</label>
+      <!-- Datos del propietario -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <h5 class="mb-3">Datos del propietario</h5>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Dirección actual <span class="req-dot">*</span></label>
+              <input type="text" name="direccion_actual" class="form-control" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">RFC <span class="req-dot">*</span></label>
+              <input type="text" name="rfc" class="form-control text-uppercase"
+                     pattern="^[A-Z0-9]{13}$" maxlength="13" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">CURP <span class="req-dot">*</span></label>
+              <input type="text" name="curp" class="form-control text-uppercase"
+                     pattern="^[A-Z0-9]{18}$" maxlength="18" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Teléfono <span class="req-dot">*</span></label>
+              <input type="tel" name="telefono" class="form-control"
+                     pattern="^\d{10}$" placeholder="55XXXXXXXX" required>
+            </div>
+          </div>
         </div>
-        <div class="doc-file small text-secondary mt-1">Sin archivo</div>
-        <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
-      <!-- Escritura del inmueble -->
-      <div class="doc-card" data-field="escritura">
-        <div class="doc-emoji">📄</div>
-        <div class="doc-title">Escritura del inmueble</div>
-        <div class="doc-upload">
-          <input id="escritura" type="file" name="escritura" accept=".pdf,image/*" required>
-          <label for="escritura">Seleccionar archivo</label>
+      <!-- Bancario -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <h5 class="mb-3">Datos para recibir el pago de la mensualidad rentística</h5>
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label">Banco <span class="req-dot">*</span></label>
+              <input type="text" name="banco" class="form-control" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Cuenta bancaria <span class="req-dot">*</span></label>
+              <input type="text" name="cuenta_bancaria" class="form-control"
+                     pattern="^\d{10,20}$" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">CLABE interbancaria <span class="req-dot">*</span></label>
+              <input type="text" name="clabe_interbancaria" class="form-control"
+                     pattern="^\d{18}$" maxlength="18" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Titular de la cuenta <span class="req-dot">*</span></label>
+              <input type="text" name="titular_cuenta" class="form-control" required>
+            </div>
+          </div>
         </div>
-        <div class="doc-file small text-secondary mt-1">Sin archivo</div>
-        <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
-      <!-- Contrato o poder notarial -->
-      <div class="doc-card" data-field="contrato_poder">
-        <div class="doc-emoji">📑</div>
-        <div class="doc-title">Contrato o poder notarial</div>
-        <div class="doc-upload">
-          <input id="contrato_poder" type="file" name="contrato_poder" accept=".pdf,image/*" required>
-          <label for="contrato_poder">Seleccionar archivo</label>
+      <!-- Inmueble -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <h5 class="mb-3">Datos del inmueble a rentar</h5>
+
+          <div class="mb-2 small-hint">
+            Orden: <strong>Calle Número Colonia</strong>. Ejemplo: <em>Insurgentes Sur 745 Del Valle</em>.
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-12">
+              <label class="form-label">Dirección completa (del inmueble) <span class="req-dot">*</span></label>
+              <input type="text" name="direccion" class="form-control"
+                     pattern="^\S+(?:\s+\S+)*\s+\d[\dA-Za-z\/-]*\s+\S+(?:\s+\S+)*$"
+                     placeholder="Calle Número Colonia" required>
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label">Tipo de inmueble</label>
+              <input type="text" name="tipo_inmueble" class="form-control">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Superficie del terreno (m²)</label>
+              <input type="text" name="superficie_terreno" class="form-control" pattern="^\d+(\.\d+)?$">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Metros construidos (m²)</label>
+              <input type="text" name="metros_construidos" class="form-control" pattern="^\d+(\.\d+)?$">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Habitaciones</label>
+              <input type="number" name="habitaciones" class="form-control" min="0" step="1">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Baños</label>
+              <input type="number" name="banos" class="form-control" min="0" step="1">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Estacionamientos</label>
+              <input type="number" name="estacionamientos" class="form-control" min="0" step="1">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Uso de suelo</label>
+              <input type="text" name="uso_suelo" class="form-control">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Cuenta predial</label>
+              <input type="text" name="cuenta_predial" class="form-control">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Cuenta de agua</label>
+              <input type="text" name="cuenta_agua" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Servicios que se pagan</label>
+              <input type="text" name="servicios_pagan" class="form-control">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Características del inmueble</label>
+              <input type="text" name="caracteristicas" class="form-control" placeholder="Cocina integral, closets empotrados, acabados de lujo...">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Inventario del inmueble</label>
+              <input type="text" name="inventario" class="form-control" placeholder="Sala, comedor, refrigerador, lavadora...">
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label">Precio de renta (MXN) <span class="req-dot">*</span></label>
+              <input type="text" name="precio_renta" class="form-control" pattern="^\d+(\.\d{1,2})?$" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Fecha de inicio de la renta <span class="req-dot">*</span></label>
+              <input type="date" name="fecha_inicio_renta" class="form-control" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Fecha de firma del contrato <span class="req-dot">*</span></label>
+              <input type="date" name="fecha_firma_contrato" class="form-control" required>
+            </div>
+          </div>
         </div>
-        <div class="doc-file small text-secondary mt-1">Sin archivo</div>
-        <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
-      <!-- Constancia del folio real -->
-      <div class="doc-card" data-field="folio_real">
-        <div class="doc-emoji">📘</div>
-        <div class="doc-title">Constancia del folio real</div>
-        <div class="doc-upload">
-          <input id="folio_real" type="file" name="folio_real" accept=".pdf,image/*" required>
-          <label for="folio_real">Seleccionar archivo</label>
+      <!-- Archivos requeridos -->
+      <div class="row g-3">
+        <div class="col-12 col-md-6 col-xl-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <label class="form-label">Solicitud de arrendamiento (propietario) <span class="req-dot">*</span></label>
+              <input type="file" class="form-control" name="solicitud_propietario" accept=".pdf,.jpg,.jpeg,.png" required>
+              <div class="small-hint mt-1" id="ok_solicitud_propietario"></div>
+            </div>
+          </div>
         </div>
-        <div class="doc-file small text-secondary mt-1">Sin archivo</div>
-        <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
+        <div class="col-12 col-md-6 col-xl-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <label class="form-label">Identificación oficial <span class="req-dot">*</span></label>
+              <input type="file" class="form-control" name="identificacion" accept=".pdf,.jpg,.jpeg,.png" required>
+              <div class="small-hint mt-1" id="ok_identificacion"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <label class="form-label">Comprobante de domicilio <span class="req-dot">*</span></label>
+              <input type="file" class="form-control" name="comprobante_domicilio" accept=".pdf,.jpg,.jpeg,.png" required>
+              <div class="small-hint mt-1" id="ok_comprobante_domicilio"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <label class="form-label">Escritura del inmueble <span class="req-dot">*</span></label>
+              <input type="file" class="form-control" name="escritura" accept=".pdf,.jpg,.jpeg,.png" required>
+              <div class="small-hint mt-1" id="ok_escritura"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <label class="form-label">Contrato o poder notarial (si aplica)</label>
+              <input type="file" class="form-control" name="contrato_poder" accept=".pdf,.jpg,.jpeg,.png">
+              <div class="small-hint mt-1" id="ok_contrato_poder"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <label class="form-label">Constancia de folio real <span class="req-dot">*</span></label>
+              <input type="file" class="form-control" name="folio_real" accept=".pdf,.jpg,.jpeg,.png" required>
+              <div class="small-hint mt-1" id="ok_folio_real"></div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div class="mt-4">
-      <button id="btn-propietario" class="btn btn-primary" disabled>Enviar documentos</button>
-      <a href="/" class="btn btn-secondary ms-2">Cancelar</a>
-    </div>
-  </form>
-</div>
+      <div class="d-flex gap-2 mt-4">
+        <button id="btnEnviar" class="btn btn-primary" type="submit" disabled>Enviar documentos</button>
+        <a href="/" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</main>
 
 <script>
-  (function(){
-    // Validación de @gmail.com y de dirección
-    const form = document.getElementById('form-propietario');
-    const email = form.querySelector('input[name="correo"]');
-    const dir = form.querySelector('input[name="direccion"]');
-
-    function validaGmail() {
-      if (!/@gmail\.com\s*$/i.test(email.value.trim())) {
-        email.setCustomValidity('El correo debe ser @gmail.com');
-      } else {
-        email.setCustomValidity('');
-      }
+  // Folio check simulado: solo valida patrón, muestra estado y marca hidden
+  document.getElementById('btnCheckFolio').addEventListener('click', () => {
+    const folio = document.getElementById('folio');
+    const msg = document.getElementById('folioMsg');
+    const ok  = document.getElementById('folio_ok');
+    if (folio.checkValidity()) {
+      ok.value = '1';
+      msg.className = 'align-self-center small-hint text-success';
+      msg.textContent = 'Folio verificado ✓';
+    } else {
+      ok.value = '0';
+      msg.className = 'align-self-center small-hint text-danger';
+      msg.textContent = 'Folio inválido';
     }
-    function validaDireccion() {
-      if (!dir.checkValidity()) {
-        dir.setCustomValidity('Formato: Calle Número Colonia (en ese orden)');
+    toggleSubmit();
+  });
+
+  // Marca "Listo" debajo de cada input file
+  const fileNames = [
+    'solicitud_propietario', 'identificacion', 'comprobante_domicilio',
+    'escritura', 'contrato_poder', 'folio_real'
+  ];
+  fileNames.forEach(name => {
+    const el = document.querySelector(`input[name="${name}"]`);
+    if (!el) return;
+    el.addEventListener('change', () => {
+      const hint = document.getElementById(`ok_${name}`);
+      if (el.files && el.files.length > 0) {
+        hint.textContent = 'Listo';
+        hint.className = 'small-hint file-ok';
       } else {
-        dir.setCustomValidity('');
+        hint.textContent = '';
+        hint.className = 'small-hint';
       }
+      toggleSubmit();
+    });
+  });
+
+  // Habilita submit cuando: folio_ok=1, form válido y todos los requeridos con archivo
+  function toggleSubmit() {
+    const btn = document.getElementById('btnEnviar');
+    const form = document.getElementById('formProp');
+    const folioOk = document.getElementById('folio_ok').value === '1';
+
+    // archivos requeridos
+    const requiredFiles = ['solicitud_propietario','identificacion','comprobante_domicilio','escritura','folio_real'];
+    const filesOk = requiredFiles.every(n => {
+      const el = document.querySelector(`input[name="${n}"]`);
+      return el && el.files && el.files.length > 0;
+    });
+
+    btn.disabled = !(folioOk && form.checkValidity() && filesOk);
+  }
+
+  // Escuchar cambios del formulario para revalidar
+  document.getElementById('formProp').addEventListener('input', toggleSubmit);
+  document.getElementById('formProp').addEventListener('change', toggleSubmit);
+
+  // Evitar envío si inválido (Bootstrap-like)
+  document.getElementById('formProp').addEventListener('submit', function (e) {
+    if (!this.checkValidity()) {
+      e.preventDefault();
+      e.stopPropagation();
     }
-
-    email.addEventListener('input', validaGmail);
-    dir.addEventListener('input', validaDireccion);
-  })();
-</script>
-
-<script>
-(function(){
-  const form = document.getElementById('form-propietario');
-  const inputs = Array.from(form.querySelectorAll('.doc-card input[type="file"][required]'));
-  const btn = document.getElementById('btn-propietario');
-
-  function shortName(name){
-    if(!name) return "Sin archivo";
-    return name.length > 38 ? name.slice(0,18) + "…" + name.slice(-16) : name;
-  }
-  function updateCard(input){
-    const card = input.closest('.doc-card');
-    const ok = input.files && input.files.length > 0;
-    card.classList.toggle('ok', ok);
-    card.querySelector('.doc-text').textContent = ok ? 'Listo' : 'Pendiente';
-    const fn = card.querySelector('.doc-file');
-    if(fn) fn.textContent = ok ? shortName(input.files[0].name) : 'Sin archivo';
-  }
-  function reevaluate(){ btn.disabled = !inputs.every(i => i.files && i.files.length > 0); }
-
-  inputs.forEach(i => { i.addEventListener('change', ()=>{ updateCard(i); reevaluate(); }); updateCard(i); });
-  reevaluate();
-})();
-</script>
-
-<script>
-(function(){
-  const header = document.querySelector('.barra-superior'); if(!header) return;
-  const set = () => document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
-  set(); window.addEventListener('resize', set);
-})();
+    this.classList.add('was-validated');
+  });
 </script>
 </body>
 </html>
