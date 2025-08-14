@@ -17,10 +17,11 @@
   </div>
   <div class="menu-icon" onclick="toggleMenu()">☰</div>
   <nav class="menu-links" id="menu">
-    <a href="/">Inicio</a>
-    <a href="/contacto">Contacto</a>
+    <!-- Inicio -->
+    <a class="nav-link" href="{{ url_for('routes.home') }}">Inicio</a>
+    <a href="{{ url_for('routes.contacto') }}">Contacto</a>
     <a href="/#servicios">Servicios</a>
-    <a href="/privacidad">Políticas</a>
+    <a href="{{ url_for('routes.politicas') }}">Políticas</a>
   </nav>
   {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
@@ -60,21 +61,40 @@
 
   <!-- SECCIÓN BENEFICIOS -->
   <section class="seccion fondo-marca" id="beneficios">
-   <h2>
-    ¿Por qué elegirnos?
-   </h2>
-   <div class="grid">
-    <div class="card">
-     ✅ Experiencia de más de 15 años
+  <div class="container">
+    <h2 class="mb-4">¿Por qué elegirnos?</h2>
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 cards-beneficios">
+      <div class="col">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body d-flex align-items-center gap-2">
+            <span class="fs-5">✅</span>
+            <span>Experiencia de más de 15 años</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body d-flex align-items-center gap-2">
+            <span class="fs-5">💼</span>
+            <span>Se hace una investigación jurídica de antecedentes de los prospectos</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body d-flex align-items-center gap-2">
+            <span class="fs-5">🔒</span>
+            <span>Aprobación rápida</span>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="card">
-     💼 Se hace una investigación  jurídica de antecedentes de los prospectos
-    </div>
-    <div class="card">
-     🔒 Aprobacion rápida
-    </div>
-   </div>
-  </section>
+  </div>
+</section>
+
   <!-- INFORMACIÓN DEL SERVICIO -->
   <section class="seccion fondo-marca" id="servicios">
    <h2>
@@ -133,8 +153,8 @@
 
         <!-- botón debajo -->
         <div class="doc-btn-wrap">
-          <a href="{{ url_for('main.documentos_propietario') }}"
-            class="btn btn-doc btn-lg px-4">
+          <a href="{{ url_for('routes.subir_propietario') }}"
+            class="btn btn-primary btn-lg px-4 shadow-sm">
             🧑‍💼 Subir documentos – Propietario
           </a>
         </div>
@@ -153,8 +173,8 @@
 
         <!-- botón debajo -->
         <div class="doc-btn-wrap">
-          <a href="{{ url_for('main.documentos_inquilino') }}"
-            class="btn btn-doc btn-lg px-4">
+          <a href="{{ url_for('routes.subir_inquilino') }}"
+            class="btn btn-primary btn-lg px-4 shadow-sm">
             👤 Subir documentos – Inquilino
           </a>
         </div>
@@ -267,41 +287,35 @@
     </div>
    </div>
    <!-- Póliza para Mascotas -->
-<section id="poliza-mascotas" class="container my-5">
-  <div class="card shadow-sm border-0">
-    <div class="card-body">
-      <h2 class="h4 mb-2">Póliza para Mascotas</h2>
-      <p class="mb-3">
-        Con esta podrás arrendar un inmueble con tranquilidad para el propietario del bien; 
-        si la mascota causa algún desperfecto, será cubierto por la póliza.
-      </p>
+    <section id="poliza-mascotas" class="container my-5">
+      <div class="card shadow-sm border-0 mx-auto" style="max-width: 760px;">
+        <div class="card-body p-4 p-md-5 text-center">
+          <h2 class="h4 mb-2">Póliza para Mascotas</h2>
+          <p class="text-muted mb-4">
+            Arrenda con tranquilidad: si la mascota causa algún desperfecto, la póliza lo cubre según términos.
+          </p>
 
-      <!-- Mini formulario para personalizar el WhatsApp -->
-      <div class="row g-2 align-items-end">
-        <div class="col-md-4">
-          <label class="form-label">Nombre (opcional)</label>
-          <input id="pm_nombre" type="text" class="form-control" placeholder="Tu nombre">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Folio (opcional)</label>
-          <input id="pm_folio" type="text" class="form-control" placeholder="AEPRA-YYYYMM-XXXX">
-        </div>
-        <div class="col-md-4 d-flex gap-2">
-          <a href="{{ url_for('routes.terminos_mascotas') }}" class="btn btn-outline-secondary flex-fill">
-            Ver términos y montos
-          </a>
-          <button id="btnWApm" class="btn btn-success flex-fill" type="button">
-            Consultar por WhatsApp
-          </button>
+          <div class="d-flex flex-wrap justify-content-center gap-2">
+            <a href="{{ url_for('routes.terminos_mascotas') }}" class="btn btn-outline-secondary">
+              Ver términos y montos
+            </a>
+
+            
+            <a
+              class="btn btn-success"
+              target="_blank" rel="noopener"
+              href="https://wa.me/5551882212?text=Hola%2C%20me%20interesa%20la%20P%C3%B3liza%20para%20Mascotas%20de%20AEPRA.%20%C2%BFMe%20pueden%20dar%20informaci%C3%B3n%2C%20por%20favor%3F">
+              Consultar por WhatsApp
+            </a>
+          </div>
+
+          <small class="text-muted d-block mt-3">
+            *Consulta términos y condiciones y montos asegurados.
+          </small>
         </div>
       </div>
+    </section>
 
-      <small class="text-muted d-block mt-2">
-        *Consulta términos y condiciones y montos asegurados.
-      </small>
-    </div>
-  </div>
-</section>
 
 <script>
 const PM_WHATS_NUMBER = "5551882212";

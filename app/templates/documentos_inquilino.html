@@ -19,18 +19,26 @@
   </style>
 </head>
 <body>
-<header class="barra-superior solid">
-  <div class="menu-links" id="menu">
-    <a href="/">Inicio</a>
-    <a href="/#servicios">Servicios</a>
-    <a href="/contacto">Contacto</a>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container">
+    <a class="navbar-brand" href="/">AEPRA</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navInq" aria-controls="navInq" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navInq">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item"><a class="nav-link" href="/">Inicio</a></li>
+        <li class="nav-item"><a class="nav-link" href="/#servicios">Servicios</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('routes.contacto') }}">Contacto</a></li>
+      </ul>
+    </div>
   </div>
-</header>
+</nav>
 
 <div class="container page-docs py-4">
   <h1 class="mb-4">Subir documentos – Inquilino (Arrendatario)</h1>
 
-  <form method="POST" action="{{ url_for('main.subir_inquilino') }}" enctype="multipart/form-data" id="form-inquilino">
+  <form method="POST" action="{{ url_for('routes.subir_inquilino') }}" enctype="multipart/form-data" id="form-inquilino">
 
     <!-- FOLIO -->
     <div class="card full mb-3">
@@ -357,7 +365,7 @@
       return;
     }
     try{
-      const r = await fetch('/admin/verificar-folio?folio='+encodeURIComponent(v));
+      const r = await fetch('/api/verificar-folio/' + encodeURIComponent(v));
       const j = await r.json();
       if(j.ok){
         msg.textContent='Folio verificado ✓';
@@ -384,7 +392,9 @@
     card.classList.toggle('ok', ok);
     const fn = card.querySelector('.doc-file'); if(fn) fn.textContent = ok?shortName(input.files[0].name):'Sin archivo';
     const st = card.querySelector('.doc-text'); if(st) st.textContent = ok?'Listo':'Pendiente';
-    submitBtn.disabled = submitBtn.disabled || !allFilesOk();
+    // correcto
+    submitBtn.disabled = !allFilesOk();
+
   }
   inputs.forEach(i=>{ i.addEventListener('change', ()=>updateCard(i)); updateCard(i); });
 })();

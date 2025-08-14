@@ -139,13 +139,19 @@ body {
   margin-top: 20px;
 }
 
-.card {
-  background-color: white;
+/* Solo estiliza las cards del bloque "Información del servicio",
+   no todas las cards del sitio */
+.cuadros-servicio .card {
+  background-color: #fff;
   padding: 30px;
   border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.1);
   width: 250px;
 }
+
+/* Para el resto de las cards (ej. Póliza de Mascotas) deja el ancho libre */
+.card { width: auto; }
+
 /* <!-- INFORMACIÓN DEL SERVICIO --> */
 .cuadros-servicio {
   display: flex;
@@ -1108,7 +1114,7 @@ html, body {
 }
 
 /* Empuje para que la barra no tape el contenido */
-.page-docs{ margin-top: calc(var(--header-h, var(--navbar-h)) + 16px); }
+
 
 /* Grid / tarjetas de documentos */
 .doc-grid{
@@ -1148,4 +1154,490 @@ button[disabled]{ opacity:.6; cursor:not-allowed; }
 
 @media (max-width: 576px){
   .barra-superior.solid{ padding:0 16px; }
+}
+
+
+/* ==== AEPRA Styles (clean rebuild) ====
+   Nota: no sobreescribimos clases .btn de Bootstrap.
+   Solo agregamos utilidades y componentes específicos.
+===================================================== */
+
+:root{
+  --brand:#0d6efd;           /* Bootstrap primary */
+  --ink:#1f2937;
+  --muted:#6b7280;
+  --bg:#f6f7fb;
+  --card:#ffffff;
+  --shadow:0 8px 24px rgba(0,0,0,.08);
+  --radius:16px;
+}
+
+/* Base */
+html,body{height:100%}
+body{
+  margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+  background:var(--bg); color:var(--ink);
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+img{max-width:100%; height:auto; display:block}
+
+/* Header transparente fijo */
+.barra-superior{
+  position:sticky; top:0; z-index:1000;
+  backdrop-filter:saturate(140%) blur(8px);
+  background:linear-gradient(to bottom, rgba(255,255,255,.85), rgba(255,255,255,.55));
+  border-bottom:1px solid rgba(0,0,0,.06);
+}
+.barra-superior .nav-link{ color:#0b1324; font-weight:600 }
+.barra-superior .nav-link:hover{ color:var(--brand) }
+
+/* Hero */
+.hero{
+  min-height:68vh; display:grid; place-items:center;
+  background: center/cover no-repeat url('/static/img/hero_fondo.jpg');
+  position:relative;
+}
+.hero::after{
+  content:""; position:absolute; inset:0; background:rgba(0,0,0,.35);
+}
+.contenido-hero{ position:relative; z-index:1; text-align:center; padding:56px 16px }
+.contenido-hero h1{
+  color:#fff; font-size:clamp(28px, 5vw, 56px); line-height:1.1; margin:0 0 12px;
+  text-shadow: 0 2px 12px rgba(0,0,0,.5);
+}
+.contenido-hero .sub{
+  color:#e5e7eb; font-size:clamp(15px, 2.2vw, 20px); max-width:900px; margin:0 auto 18px;
+}
+
+/* ===== Sección: ¿Qué documentos necesito? ===== */
+.documentos-section{ padding:64px 16px }
+.documentos-section h2{
+  text-align:center; font-weight:800; letter-spacing:.4px; margin-bottom:28px;
+}
+.documentos-contenedor{
+  display:grid; gap:20px; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));
+  max-width:1100px; margin:0 auto;
+}
+.documentos-col{
+  background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow);
+  padding:22px 20px; border:1px solid rgba(13,110,253,.10);
+}
+.documentos-col h3{ margin:0 0 12px; font-weight:700 }
+.documentos-col ul{ padding-left:0; margin:0 0 12px; list-style:none }
+.documentos-col li{ padding:.38rem .25rem; display:flex; gap:.5rem; align-items:flex-start }
+.documentos-col li::before{ content:"✓"; color:var(--brand); font-weight:800; margin-top: 1px }
+
+/* Enlace que luce como botón (no rompe Bootstrap) */
+.link-btn{ display:inline-flex; align-items:center; gap:.5rem; font-weight:600;
+  text-decoration:none; background:var(--brand); color:#fff!important; border-radius:999px;
+  padding:.6rem 1rem; box-shadow: 0 6px 16px rgba(13,110,253,.25);
+}
+.link-btn:hover{ filter:brightness(.95) }
+.link-btn .ico{ font-size:1.1rem; }
+
+/* ===== Tarjeta: Póliza para Mascotas ===== */
+.pets-grid{ display:grid; gap:24px; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); max-width:1100px; margin:0 auto 40px; padding:0 16px }
+.poliza-card{
+  background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow);
+  padding:22px; border:1px solid rgba(0,0,0,.06);
+}
+.poliza-card h3{ margin:0 0 8px; font-weight:800 }
+.poliza-card p{ color:var(--muted); margin:0 0 14px }
+.badge-pill{ display:inline-block; background:#eef2ff; color:#3730a3; border-radius:999px; padding:.25rem .65rem; font-weight:700; font-size:.78rem; border:1px solid #c7d2fe }
+.card-actions{ display:flex; gap:10px; flex-wrap:wrap }
+.card-actions .btn{ border-radius:999px; padding:.6rem 1rem }
+
+/* ===== Página de carga de documentos ===== */
+.page-docs{ padding:42px 16px }
+.doc-grid{ display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)) }
+.doc-card{
+  background:var(--card); border-radius:14px; box-shadow:var(--shadow);
+  padding:14px; border:1px solid rgba(13,110,253,.12)
+}
+.doc-card .title{ font-weight:700; margin:0 0 4px }
+.doc-status{ display:flex; align-items:center; gap:.5rem }
+.doc-status small{ color:var(--muted) }
+.doc-upload{ display:flex; align-items:center; gap:10px; padding:8px; border-radius:10px; border:1px dashed #cbd5e1 }
+.doc-upload input[type="file"]{ display:none }
+.doc-upload label{ cursor:pointer; padding:.45rem .8rem; border-radius:10px; border:1px solid #dbeafe; background:#eff6ff; font-weight:600 }
+.doc-file{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100% }
+
+/* Utilidades */
+.shadow-soft{ box-shadow:var(--shadow) }
+.rounded-xl{ border-radius:var(--radius) }
+.text-muted-2{ color:var(--muted) }
+
+@media (max-width:576px){
+  .barra-superior{ padding:0 14px }
+}
+
+/* === FIX: Hero como en la foto 1 === */
+.hero{
+  min-height: 100vh;
+  padding-top: 80px;
+  background-image: url('/static/img/hero_fondo.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+}
+
+.contenido-hero{
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+/* El título vuelve a ser una “pastilla” azul, no a todo lo ancho */
+.contenido-hero h1{
+  display: inline-block;          /* <- clave: ya no ocupa el 100% */
+  width: auto;                    /* <- por si alguna regla le puso 100% */
+  max-width: 1100px;              /* evita que sea demasiado largo */
+  margin: 0 auto 10px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background-color: rgba(141,196,255,.75);
+  color: #fff;
+  font-weight: 800;
+  line-height: 1.2;
+  font-size: clamp(26px, 3.2vw, 42px);  /* tamaño como en la foto 1 */
+  text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.137);
+}
+
+/* Subtítulo */
+.contenido-hero p{
+  color: #eaeaea;
+  font-size: 1rem;
+  margin-bottom: 16px;
+}
+
+/* Botón del hero (si usas la clase .boton) */
+.boton{
+  display: inline-block;
+  background: #0d6dfd0a;
+  color: #fff;
+  border: 0;
+  padding: .55rem 1rem;
+  border-radius: 8px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 6px 16px rgba(13,110,253,.25);
+}
+.boton:hover{ filter: brightness(.95); }
+
+:root{ --header-h:72px; }  /* se ajustará con JS */
+
+.barra-superior{
+  position: fixed;           /* saca la barra del flujo */
+  top: 0; left: 0; right: 0;
+  background: transparent !important;   /* totalmente transparente */
+  border: 0; box-shadow: none;
+  z-index: 1000;
+  padding: 8px 24px;
+}
+.barra-superior .nav-link,
+.barra-superior a{
+  color: #fff !important;                /* enlaces blancos sobre la foto */
+  text-shadow: 0 2px 6px rgba(0,0,0,.45);
+  font-weight: 600;
+}
+.barra-superior .nav-link:hover{ color:#e6f0ff !important; }
+
+.logos-combinados img{
+  height: 60px; 
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.5));
+}
+
+/* Hero: la imagen debe empezar desde arriba */
+.hero{
+  min-height: 100vh;
+  padding: 0;                             /* <- importante: sin padding arriba */
+  background: center/cover no-repeat url('/static/img/hero_fondo.jpg');
+  position: relative;
+}
+.contenido-hero{
+  position: relative; z-index: 1; text-align: center;
+  padding-top: calc(var(--header-h) + 8px); /* empuja SOLO el texto, no la imagen */
+}
+
+/* pastilla del título (como ya lo dejamos) */
+.contenido-hero h1{
+  display:inline-block; width:auto; max-width:1100px;
+  margin:0 auto 10px; padding:8px 14px; border-radius:10px;
+  background-color: rgba(141,196,255,.75);
+  color:#fff; font-weight:800; line-height:1.2;
+  font-size: clamp(26px, 3.2vw, 42px);
+  text-shadow: 2px 2px 6px rgba(0,0,0,.4);
+}
+
+
+/* === FIX: doble barra de scroll (solo el body scrollea) === */
+html, body { height: auto; min-height: 100%; }
+html { overflow-y: auto; }
+body { overflow-y: auto; overflow-x: hidden; }
+
+/* Evitar scroll interno en wrappers/secciones */
+.page-docs,
+.seccion,
+.documentos-section,
+.pets-grid,
+.container,
+.card.full,
+.doc-grid,
+.navbar {
+  overflow: visible !important;
+}
+
+/* Quita cualquier alto forzado de viewport en wrappers que pueda generar scroll anidado */
+.page-docs,
+.seccion,
+.documentos-section {
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+/* Si tienes algo como .hero con min-height:100vh está bien; evita overflow en padres */
+
+/* === FIX Formularios documentos: tarjetas a todo el ancho === */
+.page-docs .card{
+  width: 100% !important;
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Si tienes un override a .container, neutralízalo aquí solo para estas páginas */
+.page-docs .container,
+.page-docs .container-xl,
+.page-docs .container-xxl{
+  max-width: 1140px !important;  /* o 1320px si quieres aún más ancho */
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+/* --- PATCH: formularios de Documentos a ancho completo --- */
+.page-docs form { max-width: 100% !important; width: 100% !important; }
+.page-docs .card { width: 100% !important; max-width: none !important; margin-left: 0 !important; margin-right: 0 !important; }
+.page-docs .container, .page-docs .container-xl, .page-docs .container-xxl { max-width: 1140px !important; padding-left: 12px; padding-right: 12px; }
+
+/* === FIX navbar descuadrado en páginas de documentos === */
+/* 1) No toques el container del navbar */
+.page-docs nav.navbar .container,
+.page-docs nav.navbar .container-xl,
+.page-docs nav.navbar .container-xxl {
+  max-width: 1320px !important;                 /* valor Bootstrap para xxl */
+  padding-left: var(--bs-gutter-x, .75rem) !important;
+  padding-right: var(--bs-gutter-x, .75rem) !important;
+}
+
+/* 2) Aplica el ancho extra SOLO al contenido (dentro de <main>) */
+.page-docs main .container,
+.page-docs main .container-xl,
+.page-docs main .container-xxl {
+  max-width: 1140px !important;                 /* usa 1320px si quieres más ancho */
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+/* 3) Mantén tarjetas y formularios a ancho completo en contenido */
+.page-docs main .card {
+  width: 100% !important;
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+.page-docs main form {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* === NAVFIX Propietario === */
+/* No tocar el ancho del container dentro del navbar */
+.page-docs nav.navbar .container,
+.page-docs nav.navbar .container-xl,
+.page-docs nav.navbar .container-xxl {
+  max-width: 1320px !important; /* valor xxl de Bootstrap */
+  padding-left: var(--bs-gutter-x, .75rem) !important;
+  padding-right: var(--bs-gutter-x, .75rem) !important;
+}
+
+/* Aplicar el ancho mayor solo al contenido de la página */
+.page-docs main .container,
+.page-docs main .container-xl,
+.page-docs main .container-xxl {
+  max-width: 1140px !important;  /* súbelo a 1320px si quieres aún más amplio */
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+/* Tarjetas y formulario a ancho completo solo dentro del contenido */
+.page-docs main .card {
+  width: 100% !important;
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+.page-docs main form { max-width: 100% !important; width: 100% !important; }
+
+/* Navbar normal en páginas de documentos (no fija, no especial) */
+.page-docs .navbar {
+  position: static !important;
+  height: auto !important;
+  padding: .5rem 1rem !important;
+  background: #212529 !important; /* equivalente a bg-dark */
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+/* ====== NAVBAR FIX para páginas de documentos ====== */
+/* Asegura navbar normal de Bootstrap (no fija, sin alto forzado) */
+.page-docs .navbar{
+  position: static !important;
+  height: auto !important;
+  padding: .5rem 1rem !important;
+  background: #212529 !important;  /* bg-dark */
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  margin-top: 0 !important;
+}
+
+/* El container del navbar debe ser flex y con ancho Bootstrap normal */
+.page-docs nav.navbar .container{
+  display: flex !important;
+  align-items: center !important;
+  max-width: 1320px !important; /* valor xxl de Bootstrap */
+  padding-left: var(--bs-gutter-x,.75rem) !important;
+  padding-right: var(--bs-gutter-x,.75rem) !important;
+}
+
+/* Quita centrado forzado de la marca; deja los enlaces a la derecha */
+.page-docs .navbar .navbar-brand{ margin: 0 !important; }
+.page-docs .navbar .navbar-nav{ margin-left: auto !important; }
+
+/* Si alguna página dejó padding para una barra fija, anúlalo */
+.page-docs{ padding-top: 0 !important; }
+
+
+/* ===== Docs pages: quitar desplazamiento y ocultar la barra de portada ===== */
+body.page-docs { padding-top: 0 !important; }                 /* si el sitio tenía body con padding-top */
+body.page-docs .barra-superior { display: none !important; }  /* oculta la barra translúcida de portada */
+
+/* Navbar normal en documentos (no fija, sin alto forzado, sin margen arriba) */
+body.page-docs .navbar{
+  position: static !important;
+  height: auto !important;
+  margin-top: 0 !important;
+  padding: .5rem 1rem !important;
+  background: #212529 !important; /* bg-dark */
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+/* El container del navbar sigue con el ancho de Bootstrap (no xxl) */
+body.page-docs nav.navbar .container{
+  display: flex !important;
+  align-items: center !important;
+  max-width: 1320px !important;  /* valor xxl de Bootstrap */
+  padding-left: var(--bs-gutter-x,.75rem) !important;
+  padding-right: var(--bs-gutter-x,.75rem) !important;
+}
+
+/* El contenido sí puede ser ancho dentro de <main> */
+body.page-docs main .container,
+body.page-docs main .container-xl,
+body.page-docs main .container-xxl{
+  max-width: 1140px !important;  /* súbelo a 1320px si quieres más ancho */
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+/* Cartas y formularios a ancho completo solo en el contenido */
+body.page-docs main .card{ width:100% !important; max-width:none !important; margin:0 !important; }
+body.page-docs main form{ width:100% !important; max-width:100% !important; }
+
+/* Docs: sin desplazamiento superior */
+body.page-docs { margin-top: 0 !important; padding-top: 0 !important; }
+
+/* === Quitar bordes laterales en la barra superior (solo páginas de documentos) === */
+body.page-docs {
+  margin: 0 !important;                 /* anula cualquier margen global del body */
+  padding-left: 0 !important;           /* por si algún reset agrega padding lateral */
+  padding-right: 0 !important;
+}
+
+/* Navbar a todo lo ancho, sin esquinas redondeadas ni margen lateral */
+body.page-docs .navbar{
+  position: static !important;
+  background: #212529 !important;       /* bg-dark */
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;                  /* <-- elimina los “bordes” blancos */
+  border: 0 !important;
+  border-radius: 0 !important;           /* evita esquinas con fondo de la página */
+  box-shadow: none !important;
+  padding: .5rem 1rem !important;
+}
+
+/* El contenedor INTERNO del nav se mantiene con el ancho Bootstrap y sin márgenes raros */
+body.page-docs nav.navbar > .container{
+  display: flex !important;
+  align-items: center !important;
+  max-width: 1320px !important;
+  padding-left: var(--bs-gutter-x, .75rem) !important;
+  padding-right: var(--bs-gutter-x, .75rem) !important;
+}
+
+/* === DOCS: normalizar inputs file dentro de tarjetas === */
+body.page-docs .doc-card { overflow: hidden; }
+body.page-docs .doc-card input[type="file"]{
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+
+  /* === DOCS: normalizar inputs file dentro de tarjetas === */
+body.page-docs .doc-card { overflow: hidden; }               /* recorta cualquier desborde visual */
+body.page-docs .doc-card input[type="file"]{
+  display: block;                                            /* no inline */
+  width: 100% !important;                                    /* ocupa el ancho de la tarjeta */
+  max-width: 100% !important;
+  box-sizing: border-box;
+  margin: 0;                                                 /* quita márgenes raros del UA */
+}
+
+/* --- Fix: cards encogidas en "¿Qué incluye nuestro servicio?" --- */
+.cards-servicio .card {
+  width: 100% !important;          /* ocupar toda su columna */
+  max-width: none !important;
+  height: 100%;
+  border-radius: 16px;
+}
+
+.cards-servicio .card-body {
+  padding: 1.25rem 1.25rem;        /* respirito */
+}
+
+.cards-servicio .card-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.cards-servicio .card-text {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Si en algún lugar dejaste un ancho fijo global para .card, neutralízalo aquí */
+.card { max-width: 100%; }
+/* y por si hubiera un width duro en otro lado… */
+.card[style*="width"] { width: 100% !important; }
+
+@media (min-width: 992px) {
+  .cards-servicio .col { display: flex; }
+  .cards-servicio .card { display: flex; }
+  .cards-servicio .card-body { display: flex; flex-direction: column; }
 }
