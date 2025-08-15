@@ -11,7 +11,7 @@
 
   <header class="barra-superior">
     <div class="logos-combinados">
-      <img src="{{ url_for('static', filename='img/imagen_principal.png') }}" style="height: 75px; border: 5px dashed rgba(255, 255, 255, 0);"/>
+      <img src="{{ url_for('static', filename='img/imagen_principal.png') }}" style="height: 75px; border: 5px dashed rgba(255, 255, 255, 0);" alt="Logo"/>
     </div>
     <nav class="menu">
       <a href="/">Inicio</a>
@@ -20,32 +20,47 @@
     </nav>
   </header>
 
-  <main class="formulario-contacto">
+  <main class="formulario-contacto container py-4">
     <h1>Contáctanos</h1>
     <p>Completa el formulario y nos pondremos en contacto contigo lo antes posible.</p>
 
-    <form action="/guardar_contacto" method="POST">
-      <div class="campo">
-        <label for="nombre">Nombre completo</label>
-        <input type="text" id="nombre" name="nombre" required>
+    <!-- Mensajes flash (éxito / error) -->
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% if msgs %}
+        <div class="mb-3">
+          {% for cat, m in msgs %}
+            <div class="alert alert-{{ 'warning' if cat=='danger' else cat }} py-2">{{ m }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- IMPORTANTE: acción correcta a la ruta /contacto -->
+    <form action="{{ url_for('routes.contacto') }}" method="post" novalidate>
+      <div class="campo mb-3">
+        <label class="form-label" for="nombre">Nombre completo*</label>
+        <input class="form-control" type="text" id="nombre" name="nombre" required
+               value="{{ form.nombre if form else '' }}">
       </div>
 
-      <div class="campo">
-        <label for="correo">Correo electrónico</label>
-        <input type="email" id="correo" name="correo" required>
+      <div class="campo mb-3">
+        <label class="form-label" for="correo">Correo electrónico*</label>
+        <input class="form-control" type="email" id="correo" name="correo" required
+               value="{{ form.correo if form else '' }}">
       </div>
 
-      <div class="campo">
-        <label for="telefono">Número de teléfono</label>
-        <input type="tel" id="telefono" name="telefono">
+      <div class="campo mb-3">
+        <label class="form-label" for="telefono">Número de teléfono</label>
+        <input class="form-control" type="tel" id="telefono" name="telefono"
+               value="{{ form.telefono if form else '' }}">
       </div>
 
-      <div class="campo">
-        <label for="mensaje">Mensaje</label>
-        <textarea id="mensaje" name="mensaje" rows="5" required></textarea>
+      <div class="campo mb-3">
+        <label class="form-label" for="mensaje">Mensaje*</label>
+        <textarea class="form-control" id="mensaje" name="mensaje" rows="5" required>{{ form.mensaje if form else '' }}</textarea>
       </div>
 
-      <button type="submit" id="botonEnviar" class="boton btn btn-primary">
+      <button type="submit" id="botonEnviar" class="btn btn-primary">
         <span class="spinner-border spinner-border-sm me-2 d-none" role="status" aria-hidden="true" id="spinner"></span>
         Enviar mensaje
       </button>
@@ -53,14 +68,14 @@
   </main>
 
   <script>
+    // Deshabilita el botón y muestra spinner al enviar
     const form = document.querySelector("form");
     form.addEventListener("submit", function (e) {
       const boton = document.getElementById("botonEnviar");
       const spinner = document.getElementById("spinner");
-
       boton.disabled = true;
       spinner.classList.remove("d-none");
-      boton.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Enviando...`;
+      boton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Enviando...';
     });
   </script>
 

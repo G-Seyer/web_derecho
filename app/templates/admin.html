@@ -45,7 +45,12 @@
       <h2 class="h5 mb-3">Buscar por folio</h2>
       <form id="frmBuscar" class="row g-2 align-items-center">
         <div class="col-sm-6 col-md-5">
-          <input id="folioBuscar" class="form-control mono" placeholder="Ej. AEPRA-202508-AB12" required pattern="^AEPRA-\\d{6}-[A-Z0-9]{4}$">
+          <input id="folioBuscar"
+       class="form-control mono"
+       placeholder="Ej. AEPRA-202508-AB12"
+       required
+       pattern="^AEPRA-\d{6}-[A-Z0-9]{4}$"
+       oninput="this.value=this.value.toUpperCase().replace(/\s+/g,'');">
         </div>
         <div class="col-auto">
           <button class="btn btn-primary" type="submit">Buscar</button>
@@ -204,8 +209,12 @@ let folioActual = '';
 frmBuscar.addEventListener('submit', async (e)=>{
   e.preventDefault();
   const input = document.getElementById('folioBuscar');
-  const folio = input.value.trim().toUpperCase();
-  if (!/^AEPRA-\\d{6}-[A-Z0-9]{4}$/.test(folio)) { input.reportValidity(); return; }
+  const folio = input.value.trim().toUpperCase().replace(/\s+/g,'');  // <— limpia espacios
+
+  if (!/^AEPRA-\d{6}-[A-Z0-9]{4}$/.test(folio)) {  // <— una sola barra
+    input.reportValidity();
+    return;
+  }
 
   const r = await fetch('/api/admin/folio/'+encodeURIComponent(folio));
   const j = await r.json();

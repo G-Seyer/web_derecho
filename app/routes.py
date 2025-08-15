@@ -2,11 +2,16 @@
 import os
 import re
 import mimetypes
-FORCE_S3 = os.getenv("FORCE_S3", "0") == "1"
+from flask import render_template, request, redirect, url_for, flash
+from app.models import MensajeContacto
 from datetime import date, datetime
+from functools import wraps
+
+FORCE_S3 = os.getenv("FORCE_S3", "0") == "1"
+
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
-    flash, jsonify, current_app as app
+    flash, jsonify, current_app as app, Response
 )
 from sqlalchemy import text
 from werkzeug.utils import secure_filename
@@ -77,7 +82,6 @@ def _save_file_to_s3(*, file_storage, folder: str, public: bool = True):
             else:
                 raise
         except Exception:
-            # Deja traza y re-lanza para que FORCE_S3=1 no permita caer a local
             app.logger.exception("Fallo guardando en S3 (reintento sin ACL)")
             raise
 
@@ -214,6 +218,7 @@ def _upsert_arrendador_datos(datos: dict):
             updated_at           = now();
     """)
     db.session.execute(sql, datos)
+
 # Mensaje flash + redirección a Inicio
 def _to_home(message: str, category: str = "success"):
     flash(message, category)
@@ -255,7 +260,6 @@ def _generar_folio_unico() -> str:
 # =====================================================
 @bp.get("/api/verificar-folio/<folio>")
 def api_verificar_folio(folio):
-    # Solo desbloquea si el folio existe y está activo
     ok = _folio_activo((folio or "").upper())
     return jsonify({"ok": ok})
 
@@ -383,98 +387,6 @@ def subir_propietario():
         return _to_home(f"❌ No se pudieron guardar los datos del propietario ({folio}). Detalle: {e}", "danger")
 
 
-    # ----------------- Datos del formulario -----------------
-    datos = {
-        "folio": folio,
-        "nombre": form.get("nombre"),
-        "correo": form.get("correo"),
-        "direccion_actual": form.get("direccion_actual"),
-        "rfc": form.get("rfc"),
-        "curp": form.get("curp"),
-        "telefono": form.get("telefono"),
-        "banco": form.get("banco"),
-        "titular_cuenta": form.get("titular_cuenta"),
-        "cuenta_bancaria": form.get("cuenta_bancaria"),
-        "clabe_interbancaria": form.get("clabe_interbancaria"),
-        "direccion": form.get("direccion"),
-        "tipo_inmueble": form.get("tipo_inmueble"),
-        "superficie_terreno": form.get("superficie_terreno"),
-        "metros_construidos": form.get("metros_construidos"),
-        "habitaciones": form.get("habitaciones"),
-        "banos": form.get("banos"),
-        "estacionamientos": form.get("estacionamientos"),
-        "uso_suelo": form.get("uso_suelo"),
-        "cuenta_predial": form.get("cuenta_predial"),
-        "cuenta_agua": form.get("cuenta_agua"),
-        "servicios_pagan": form.get("servicios_pagan"),
-        "caracteristicas": form.get("caracteristicas"),
-        "inventario": form.get("inventario"),
-        "precio_renta": form.get("precio_renta"),
-        "fecha_inicio_renta": form.get("fecha_inicio_renta"),
-        "fecha_firma_contrato": form.get("fecha_firma_contrato"),
-    }
-
-    requeridos = [
-        "nombre","correo","direccion_actual","rfc","curp","telefono",
-        "banco","titular_cuenta","cuenta_bancaria","clabe_interbancaria",
-        "direccion","precio_renta","fecha_inicio_renta","fecha_firma_contrato"
-    ]
-    faltantes = [k for k in requeridos if not (datos.get(k) or "").strip()]
-    if faltantes:
-        flash(f"Campos obligatorios faltantes: {', '.join(faltantes)}", "danger")
-        return redirect(url_for("routes.subir_propietario"))
-
-    try:
-        # Inserta/actualiza datos del arrendador
-        _upsert_arrendador_datos(datos)
-
-        # Asegura registro y obtiene usuario_id
-        arr_id = _get_or_create_usuario_id_por_folio(tabla="arrendadores", folio=folio)
-
-        # ----------------- Archivos -----------------
-        alias = {
-            "solicitud_propietario": ["solicitud_propietario", "solicitud"],
-            "identificacion": ["identificacion", "id_oficial"],
-            "comprobante_domicilio": ["comprobante_domicilio", "comp_domicilio"],
-            "escritura": ["escritura"],
-            "contrato_poder": ["contrato_poder", "poder_notarial"],  # opcional
-            "folio_real": ["folio_real", "constancia_folio_real"],
-        }
-        requeridos_doc = {"solicitud_propietario", "identificacion", "comprobante_domicilio", "escritura", "folio_real"}
-        documentos_insertados = 0
-
-        for logical, keys in alias.items():
-            fs = next((request.files[k] for k in keys if k in request.files and request.files[k] and request.files[k].filename), None)
-            if not fs:
-                if logical in requeridos_doc:
-                    raise ValueError(f"Falta archivo requerido: {logical.replace('_',' ')}")
-                continue
-            if not _ext_ok(fs.filename):
-                raise ValueError(f"Extensión no permitida: {fs.filename}")
-
-            ruta, mime, size = _save_file(
-                file_storage=fs,
-                folder=f"arrendador/{folio}/{arr_id}",
-                public=True
-            )
-            _insert_document_with_folio(
-                folio=folio, tipo_usuario="arrendador", usuario_id=arr_id,
-                tipo_documento=logical, ruta=ruta, nombre_archivo=fs.filename, mime=mime, size=size
-            )
-            documentos_insertados += 1
-
-        _marcar_uso_folio(folio, "arrendador")
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        app.logger.exception("Error guardando propietario")
-        flash(f"Ocurrió un error guardando: {e}", "danger")
-        return redirect(url_for("routes.subir_propietario"))
-
-    flash("✅ Información y documentos del propietario guardados correctamente.", "success")
-    return redirect(url_for("routes.subir_propietario"))
-
-
 @bp.route("/documentos/inquilino", methods=["GET", "POST"])
 def subir_inquilino():
     if request.method == "GET":
@@ -533,10 +445,84 @@ def subir_inquilino():
 # =====================================================
 # =====================  ADMIN  =======================
 # =====================================================
-@bp.route("/admin")
-def admin_home():
+# --- Basic Auth para /admin ---
+# --------- Login por sesión (Flask-Login) ---------
+import os, logging
+from flask import render_template, request, redirect, url_for, flash, current_app as app
+from flask_login import (
+    login_user, logout_user, login_required, UserMixin, current_user
+)
+from app import login_manager
+
+# 1) Credenciales desde .env (cargado en __init__.py)
+ADMIN_USER = (os.getenv("ADMIN_USER") or "").strip()
+ADMIN_PASS = (os.getenv("ADMIN_PASS") or "").strip()
+
+# 2) Fallback de desarrollo si .env no cargó
+USE_FALLBACK = False
+if not ADMIN_USER or not ADMIN_PASS:
+    ADMIN_USER = "admin"
+    ADMIN_PASS = "admin123"
+    USE_FALLBACK = True
+
+_auth_logger = logging.getLogger("auth")
+_auth_logger.warning(
+    "ADMIN CREDS -> user_set=%s pass_len=%d%s",
+    bool(ADMIN_USER), len(ADMIN_PASS or ""),
+    " [FALLBACK DEV ENABLED]" if USE_FALLBACK else ""
+)
+
+class AdminUser(UserMixin):
+    def __init__(self, user_id="admin"):
+        self.id = user_id
+
+@login_manager.user_loader
+def load_user(user_id: str):
+    return AdminUser("admin") if user_id == "admin" else None
+
+@bp.route("/login", methods=["GET", "POST"])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for("routes.admin"))
+
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = (request.form.get("password") or "").strip()
+
+        # Log del intento (no imprimimos la contraseña)
+        try:
+            app.logger.warning(
+                "LOGIN TRY -> user=%r match_user=%s match_pass=%s",
+                username, (username == ADMIN_USER), (password == ADMIN_PASS)
+            )
+        except Exception:
+            pass
+
+        if username == ADMIN_USER and password == ADMIN_PASS:
+            login_user(AdminUser("admin"))
+            flash("Bienvenido, acceso concedido.", "success")
+            return redirect(url_for("routes.admin"))
+        else:
+            flash("Usuario o contraseña incorrectos.", "warning")
+
+    return render_template("login.html")
+
+@bp.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    flash("Sesión cerrada.", "info")
+    return redirect(url_for("routes.login"))
+
+@bp.route("/admin", methods=["GET", "POST"])
+@login_required
+def admin():
     return render_template("admin.html")
 
+
+# =====================================================
+# ======================  API ADMIN  ==================
+# =====================================================
 @bp.get("/api/admin/folio/<folio>")
 def api_admin_folio(folio):
     conn = db.session.connection()
@@ -630,8 +616,6 @@ def api_admin_polizas():
         max_meses = 3
     incluir_vencidas = request.args.get("incluir_vencidas", "0") == "1"
 
-    # meses_restantes: years*12 + months de age(fecha_fin, current_date)
-    # días_restantes:  (fecha_fin - current_date)
     sql = text(f"""
         with pol as (
           select
@@ -675,9 +659,6 @@ def api_admin_polizas():
 def terminos_mascotas():
     return render_template("terminos_mascotas.html")
 
-@bp.route("/contacto")
-def contacto():
-    return render_template("contacto.html")
 
 @bp.route("/politicas")
 def politicas():
@@ -688,6 +669,9 @@ def privacidad_alias():
     return redirect(url_for("routes.politicas"), code=301)
 
 
+# =====================================================
+# ====================  DEBUG API  ====================
+# =====================================================
 @bp.get("/api/debug/consistencia/<folio>")
 def api_debug_consistencia(folio):
     f = (folio or "").strip().upper()
@@ -720,9 +704,8 @@ def api_debug_consistencia(folio):
 def dbg_s3():
     try:
         bucket = os.getenv("S3_BUCKET_NAME") or os.getenv("S3_BUCKET")
-        from datetime import datetime
-        s3 = _get_s3_client()  # usa tus credenciales del entorno
-        s3.head_bucket(Bucket=bucket)  # verifica que existe y tienes acceso
+        s3 = _get_s3_client()
+        s3.head_bucket(Bucket=bucket)
         return jsonify({"ok": True, "bucket": bucket, "checked_at": datetime.utcnow().isoformat()+"Z"}), 200
     except Exception as e:
         return jsonify({
@@ -730,8 +713,55 @@ def dbg_s3():
             "error": str(e),
             "env": {
                 "AWS_ACCESS_KEY_ID": bool(os.getenv("AWS_ACCESS_KEY_ID")),
-                "AWS_SECRET_ACCESS_KEY": bool(os.getenv("AWS_SECRET_ACCESS_KEY")),
+                "AWS_SECRET_ACCESS_KEY": bool(os.getenv("AWS_SECRET_ACCESS_KEY")),  
                 "AWS_DEFAULT_REGION": os.getenv("AWS_DEFAULT_REGION"),
                 "S3_BUCKET_NAME": os.getenv("S3_BUCKET_NAME") or os.getenv("S3_BUCKET"),
             }
         }), 500
+    
+# =====================================================
+# ==================== Contactanos ====================
+# =====================================================
+
+
+# app/routes.py (fragmento)
+
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+@bp.route("/contacto", methods=["GET", "POST"])
+def contacto():
+    if request.method == "POST":
+        nombre   = (request.form.get("nombre") or "").strip()
+        correo   = (request.form.get("correo") or "").strip()
+        telefono = (request.form.get("telefono") or "").strip()
+        mensaje  = (request.form.get("mensaje") or "").strip()
+
+        # Validación mínima
+        if not nombre or not correo or not mensaje:
+            flash("Nombre, correo y mensaje son obligatorios.", "warning")
+            return render_template("contacto.html", form=request.form), 400
+
+        if not EMAIL_RE.match(correo):
+            flash("Correo no válido.", "warning")
+            return render_template("contacto.html", form=request.form), 400
+
+        try:
+            m = MensajeContacto(
+                nombre=nombre,
+                correo=correo,
+                telefono=telefono or None,
+                mensaje=mensaje
+            )
+            db.session.add(m)
+            db.session.commit()
+            flash("¡Gracias! Tu mensaje fue enviado.", "success")
+            return redirect(url_for("routes.contacto"))
+        except Exception as e:
+            db.session.rollback()
+            app.logger.exception("Error guardando contacto: %s", e)  # <-- usa app.logger
+            flash("Ocurrió un error al guardar tu mensaje. Intenta de nuevo.", "danger")
+            return render_template("contacto.html", form=request.form), 500
+
+    # GET
+    return render_template("contacto.html")
