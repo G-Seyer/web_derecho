@@ -187,7 +187,7 @@
    <div class="porque-wrap">
     <div class="contenedor-central">
      <div class="porque-img">
-      <img alt="Acuerdo legal" src="{{ url_for('static', filename='img/acuerdo.jpg') }}"/>
+      <img alt="Acuerdo legal" src="{{ url_for('static', filename='img/acuerdo.png') }}"/>
      </div>
      <div class="porque-texto">
       <h2>
@@ -415,10 +415,42 @@ document.getElementById('btnWApm')?.addEventListener('click', () => {
   });
   </script>
   <script>
-   function toggleMenu() {
-    const menu = document.getElementById('menu');
-    menu.classList.toggle('show');
-  }
-  </script>
+document.addEventListener('DOMContentLoaded', () => {
+  const menu   = document.getElementById('menu');
+  const button = document.querySelector('.menu-icon');
+
+  const open   = () => menu.classList.add('show');
+  const close  = () => menu.classList.remove('show');
+  const isOpen = () => menu.classList.contains('show');
+
+  // Mantengo la función global para que siga funcionando tu onclick="toggleMenu()"
+  window.toggleMenu = () => (isOpen() ? close() : open());
+
+  // 1) Cerrar si empiezas a scrollear
+  window.addEventListener('scroll', () => { if (isOpen()) close(); }, { passive: true });
+
+  // 2) Cerrar si haces tap/click fuera del menú o del botón
+  const closeIfOutside = (ev) => {
+    if (!isOpen()) return;
+    const clickedInsideMenu  = menu.contains(ev.target);
+    const clickedOnToggler   = button && button.contains(ev.target);
+    if (!clickedInsideMenu && !clickedOnToggler) close();
+  };
+  document.addEventListener('click', closeIfOutside, { passive: true });
+  document.addEventListener('touchstart', closeIfOutside, { passive: true });
+
+  // 3) Cerrar al elegir una opción del menú
+  menu.querySelectorAll('a').forEach(a => {
+    a.addEventListener('click', () => setTimeout(close, 50)); // pequeño delay por si navega a #ancla
+  });
+
+  // 4) Cerrar con Escape (en desktop)
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+
+  // 5) (opcional) Cerrar si cambia el tamaño/orientación
+  window.addEventListener('resize', () => { if (isOpen()) close(); });
+});
+</script>
+
  </body>
 </html>
