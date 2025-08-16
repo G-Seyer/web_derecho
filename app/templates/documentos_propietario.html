@@ -112,8 +112,8 @@
             <div class="col-md-6">
               <label class="form-label">E-mail <span class="req-dot">*</span></label>
               <input type="email" name="correo" class="form-control folio-locked"
-                     pattern="^[^@\s]+@gmail\.com$" placeholder="usuario@gmail.com" required disabled>
-              <div class="form-text small-hint">Usa un correo <strong>@gmail.com</strong>.</div>
+                    pattern="^[^\s@]+@[^\s@]+\.[^\s@]+$" placeholder="usuario@correo.com" required disabled>
+              <div class="form-text small-hint">Acepta Gmail, Outlook, Yahoo, iCloud, etc.</div>
             </div>
           </div>
         </div>
@@ -144,9 +144,12 @@
                      pattern="^\d{10}$" placeholder="55XXXXXXXX" required disabled>
             </div>
             <div class="col-md-6">
-              <label class="form-label">Lugar de nacimiento</label>
-              <input type="text" name="lugar_nacimiento" class="form-control folio-locked" disabled>
-            </div>
+              <label class="form-label">Lugar y fecha de nacimiento</label>
+                <input type="text" name="lugar_nacimiento"
+                      class="form-control folio-locked rounded-bottom-0" disabled>
+
+                <input type="date" name="fecha_nacimiento"
+                      class="form-control folio-locked mt-0 rounded-top-0 border-top-0" disabled></div>
           </div>
         </div>
       </div>
@@ -269,9 +272,9 @@
         <div class="card-body w-100">
           <h5 class="mb-3">Archivos requeridos</h5>
           <div class="doc-grid">
-            <div class="doc-card w-100" data-field="solicitud_propietario">
-              <div class="fw-semibold mb-1">📝 Solicitud de arrendamiento (propietario)</div>
-              <input id="solicitud_propietario" type="file" name="solicitud_propietario" accept=".pdf,image/*" required class="folio-locked" disabled>
+            <div class="doc-card w-100" data-field="boleta_predial">
+              <div class="fw-semibold mb-1">🧾 Boleta predial</div>
+              <input id="boleta_predial" type="file" name="boleta_predial" accept=".pdf,image/*" required class="folio-locked" disabled>
               <div class="doc-file small text-secondary mt-2">Sin archivo</div>
               <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
             </div>
@@ -392,7 +395,7 @@
     inputs.forEach(i=>{ i.addEventListener('change', ()=>updateCard(i)); });
 
     function filesOk(){
-      const req = ['solicitud_propietario','identificacion','comprobante_domicilio','escritura','folio_real'];
+      const req = ['boleta_predial','identificacion','comprobante_domicilio','escritura','folio_real'];
       return req.every(n => {
         const el = document.querySelector('input[name="'+n+'"]');
         return el && el.files && el.files.length>0;

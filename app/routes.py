@@ -179,14 +179,14 @@ def _upsert_arrendador_datos(datos: dict):
             direccion, tipo_inmueble, superficie_terreno, metros_construidos,
             habitaciones, banos, estacionamientos, uso_suelo, cuenta_predial,
             cuenta_agua, servicios_pagan, caracteristicas, inventario,
-            precio_renta, fecha_inicio_renta, fecha_firma_contrato, updated_at
+            precio_renta, fecha_inicio_renta, fecha_firma_contrato, lugar_nacimiento, fecha_nacimiento, updated_at
         ) VALUES (
             :folio, :nombre, :correo, :direccion_actual, :rfc, :curp, :telefono,
             :banco, :titular_cuenta, :cuenta_bancaria, :clabe_interbancaria,
             :direccion, :tipo_inmueble, :superficie_terreno, :metros_construidos,
             :habitaciones, :banos, :estacionamientos, :uso_suelo, :cuenta_predial,
             :cuenta_agua, :servicios_pagan, :caracteristicas, :inventario,
-            :precio_renta, :fecha_inicio_renta, :fecha_firma_contrato, now()
+            :precio_renta, :fecha_inicio_renta, :fecha_firma_contrato, :lugar_nacimiento, :fecha_nacimiento, now()
         )
         ON CONFLICT (folio) DO UPDATE SET
             nombre               = EXCLUDED.nombre,
@@ -215,10 +215,30 @@ def _upsert_arrendador_datos(datos: dict):
             precio_renta         = EXCLUDED.precio_renta,
             fecha_inicio_renta   = EXCLUDED.fecha_inicio_renta,
             fecha_firma_contrato = EXCLUDED.fecha_firma_contrato,
+            lugar_nacimiento     = EXCLUDED.lugar_nacimiento,
+            fecha_nacimiento     = EXCLUDED.fecha_nacimiento,
             updated_at           = now();
     """)
     db.session.execute(sql, datos)
 
+
+def _upsert_arrendatario_datos(datos: dict):
+    """
+    Inserta/actualiza datos mínimos del arrendatario.
+    Requiere que public.arrendatarios tenga UNIQUE(folio).
+    """
+    sql = text("""
+        INSERT INTO public.arrendatarios(
+            folio, lugar_nacimiento, fecha_nacimiento, updated_at
+        ) VALUES (
+            :folio, :lugar_nacimiento, :fecha_nacimiento, now()
+        )
+        ON CONFLICT (folio) DO UPDATE SET
+            lugar_nacimiento = EXCLUDED.lugar_nacimiento,
+            fecha_nacimiento = EXCLUDED.fecha_nacimiento,
+            updated_at       = now();
+    """)
+    db.session.execute(sql, datos)
 # Mensaje flash + redirección a Inicio
 def _to_home(message: str, category: str = "success"):
     flash(message, category)
@@ -320,6 +340,8 @@ def subir_propietario():
         "precio_renta": form.get("precio_renta"),
         "fecha_inicio_renta": form.get("fecha_inicio_renta"),
         "fecha_firma_contrato": form.get("fecha_firma_contrato"),
+        "lugar_nacimiento": form.get("lugar_nacimiento"),
+        "fecha_nacimiento": (form.get("fecha_nacimiento") or None),
     }
     requeridos = [
         "nombre","correo","direccion_actual","rfc","curp","telefono",
@@ -337,14 +359,14 @@ def subir_propietario():
 
         # 2) Archivos
         alias = {
-            "solicitud_propietario": ["solicitud_propietario", "solicitud"],
+            "boleta_predial": ["boleta_predial", "solicitud_propietario", "solicitud"],
             "identificacion": ["identificacion", "id_oficial"],
             "comprobante_domicilio": ["comprobante_domicilio", "comp_domicilio"],
             "escritura": ["escritura"],
             "contrato_poder": ["contrato_poder", "poder_notarial"],  # opcional
             "folio_real": ["folio_real", "constancia_folio_real"],
         }
-        requeridos_doc = {"solicitud_propietario", "identificacion", "comprobante_domicilio", "escritura", "folio_real"}
+        requeridos_doc = {"boleta_predial", "identificacion", "comprobante_domicilio", "escritura", "folio_real"}
         guardados = []
 
         for logical, keys in alias.items():
@@ -404,6 +426,13 @@ def subir_inquilino():
     try:
         # 1) Asegura registro y obtiene id del inquilino para ese folio
         inq_id = _get_or_create_usuario_id_por_folio(tabla="arrendatarios", folio=folio)
+        # Datos nuevos del inquilino (mínimo para nacimiento)
+        datos_inq = {
+            "folio": folio,
+            "lugar_nacimiento": (form.get("lugar_nacimiento") or None),
+            "fecha_nacimiento": (form.get("fecha_nacimiento") or None)
+        }
+        _upsert_arrendatario_datos(datos_inq)
 
         # 2) Guardar todos los archivos enviados (cualesquiera que vengan del form)
         guardados = []
