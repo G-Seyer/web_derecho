@@ -291,5 +291,293 @@ frmFiltro.addEventListener('submit', async (e)=>{
   });
 });
 </script>
+
+<!-- ======================================================= -->
+<!-- ==============  Gestión de Asesores (NUEVO)  ========== -->
+<!-- ======================================================= -->
+<!-- WRAPPER PARA CENTRAR Y NO PEGAR A LOS BORDES -->
+<div class="row">
+  <div class="col-12 col-md-11 col-lg-9 col-xl-8 mx-auto px-2">
+
+<!-- 1) Registro de Asesores -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Registro de asesores</h2>
+        <form id="form-asesor" class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label">Nombre del asesor</label>
+            <input id="asesor_nombre" name="asesor_nombre" class="form-control" placeholder="Ej. Isabel Martínez" required>
+          </div>
+          <div class="col-md-3 d-flex align-items-end">
+            <button id="btnGuardarAsesor" type="button" class="btn btn-primary w-100">Guardar asesor</button>
+          </div>
+        </form>
+        <div class="mt-3">
+          <h3 class="h6">Asesores registrados</h3>
+          <ul id="lista-asesores" class="list-group small"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2) Crear Asesor Referenciado -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Crear asesor referenciado</h2>
+        <form id="form-referenciado" class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label">Asesor base</label>
+            <select id="asesor_base" name="asesor_base" class="form-select" required>
+              <option value="">Selecciona asesor…</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Nombre del referenciado</label>
+            <input id="referenciado_nombre" name="referenciado_nombre" class="form-control" placeholder="Ej. Juan Pérez" required>
+          </div>
+          <div class="col-md-4 d-flex align-items-end">
+            <button id="btnGuardarReferenciado" type="button" class="btn btn-primary w-100">Guardar referenciado</button>
+          </div>
+        </form>
+        <div class="mt-2 small text-muted">
+          Vista previa del nombre formateado: <span id="preview_ref" class="fw-semibold">—</span>
+        </div>
+        <div class="mt-3">
+          <h3 class="h6">Referenciados del asesor seleccionado</h3>
+          <ul id="lista-referenciados" class="list-group small"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3) Asignar folios a asesores/referenciados -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Asignar folios</h2>
+        <form id="form-asignar" class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label">Asesor</label>
+            <select id="asesor_select" name="asesor_select" class="form-select" required>
+              <option value="">Selecciona asesor…</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Folio a asignar</label>
+            <input id="folio_asignar" name="folio_asignar" class="form-control mono" placeholder="AEPRA-YYYYMM-XXXX" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Asignar a</label>
+            <select id="destinatario_select" name="destinatario_select" class="form-select" required>
+              <option value="">Selecciona destinatario…</option>
+            </select>
+          </div>
+          <div class="col-12 d-flex justify-content-end">
+            <button id="btnAsignarFolio" type="button" class="btn btn-success">Guardar asignación</button>
+          </div>
+        </form>
+        <div class="mt-3">
+          <h3 class="h6">Asignaciones recientes</h3>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead>
+                <tr><th>Folio</th><th>Asesor</th><th>Asignado a</th><th>Fecha</th></tr>
+              </thead>
+              <tbody id="tabla-asignaciones"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4) Filtro de folios por asesor/referenciado -->
+    <div class="card mb-5">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Filtrar folios por asesor o referenciado</h2>
+        <form id="form-filtro" class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label">Asesor</label>
+            <select id="filtro_asesor" name="filtro_asesor" class="form-select">
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Referenciado</label>
+            <select id="filtro_referenciado" name="filtro_referenciado" class="form-select" disabled>
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <div class="col-12 d-flex justify-content-end">
+            <button id="btnFiltrarFolios" type="button" class="btn btn-outline-primary">Filtrar</button>
+          </div>
+        </form>
+        <div class="table-responsive mt-3">
+          <table class="table table-sm align-middle">
+            <thead><tr><th>Folio</th><th>Asesor</th><th>Asignado a</th><th>Fecha</th></tr></thead>
+            <tbody id="tabla-folios-filtrados"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JS mínimo (UI/preview; la lógica real se conectará luego) -->
+<script>
+(function(){
+  const $ = s => document.querySelector(s);
+
+  async function apiGet(url){
+    const r = await fetch(url, {headers:{'Accept':'application/json'}});
+    return r.json();
+  }
+  async function apiPost(url, data){
+    const r = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Accept':'application/json'},
+      body: JSON.stringify(data)
+    });
+    return r.json();
+  }
+
+  const el = {
+    listaAsesores: $('#lista-asesores'),
+    asesorNombre: $('#asesor_nombre'),
+    btnGuardarAsesor: $('#btnGuardarAsesor'),
+
+    asesorBase: $('#asesor_base'),
+    refNombre: $('#referenciado_nombre'),
+    btnGuardarRef: $('#btnGuardarReferenciado'),
+    listaRef: $('#lista-referenciados'),
+    previewRef: $('#preview_ref'),
+
+    asesorSelect: $('#asesor_select'),
+    destinatarioSelect: $('#destinatario_select'),
+    folioAsignar: $('#folio_asignar'),
+    btnAsignar: $('#btnAsignarFolio'),
+    tablaAsigs: $('#tabla-asignaciones'),
+
+    filtroAsesor: $('#filtro_asesor'),
+    filtroReferenciado: $('#filtro_referenciado'),
+    btnFiltrar: $('#btnFiltrarFolios'),
+    tablaFiltro: $('#tabla-folios-filtrados'),
+  };
+
+  function setOptions(sel, arr, value='id', label='display'){
+    sel.innerHTML = '<option value="">Selecciona…</option>' +
+      arr.map(o => `<option value="${o[value]}">${o[label]}</option>`).join('');
+  }
+
+  // --------- ASESORES ---------
+  async function cargarAsesores(){
+    const list = await apiGet('/api/asesores');
+    el.listaAsesores.innerHTML = list
+      .map(a=>`<li class="list-group-item d-flex justify-content-between align-items-center">${a.nombre}<span class="badge bg-secondary">${a.id}</span></li>`)
+      .join('');
+    setOptions(el.asesorBase, list, 'id', 'nombre');
+    setOptions(el.asesorSelect, list, 'id', 'nombre');
+    setOptions(el.filtroAsesor, [{id:'',nombre:'Todos'}].concat(list), 'id', 'nombre');
+  }
+
+  el.btnGuardarAsesor?.addEventListener('click', async ()=>{
+    const nombre = (el.asesorNombre.value||'').trim();
+    if(!nombre) return;
+    const res = await apiPost('/api/asesores', {nombre});
+    if(res.ok){ el.asesorNombre.value=''; await cargarAsesores(); }
+    else alert(res.error || 'Error guardando asesor');
+  });
+
+  // --------- REFERENCIADOS ---------
+  async function cargarReferenciados(asesor_id){
+    if(!asesor_id){ el.listaRef.innerHTML=''; return; }
+    const list = await apiGet(`/api/asesores/${asesor_id}/referenciados`);
+    el.listaRef.innerHTML = list
+      .map(r=>`<li class="list-group-item d-flex justify-content-between align-items-center">${r.display}<span class="badge bg-light text-secondary">${r.id}</span></li>`)
+      .join('');
+  }
+
+  el.asesorBase?.addEventListener('change', async ()=>{
+    const id = el.asesorBase.value;
+    await cargarReferenciados(id);
+    await cargarDestinatarios(id, el.destinatarioSelect);
+    el.filtroReferenciado.disabled = true;
+  });
+
+  el.refNombre?.addEventListener('input', ()=>{
+    const opt = el.asesorBase.options[el.asesorBase.selectedIndex];
+    const nombreAsesor = opt ? opt.textContent : '';
+    const ini = (nombreAsesor.trim()[0]||'').toUpperCase();
+    el.previewRef.textContent = (ini? ini+'. ' : '') + (el.refNombre.value||'').trim();
+  });
+
+  el.btnGuardarRef?.addEventListener('click', async ()=>{
+    const asesor_id = el.asesorBase.value;
+    const nombre = (el.refNombre.value||'').trim();
+    if(!asesor_id || !nombre) return;
+    const res = await apiPost('/api/referenciados', {asesor_id, nombre});
+    if(res.ok){
+      el.refNombre.value=''; el.previewRef.textContent='—';
+      await cargarReferenciados(asesor_id);
+      await cargarDestinatarios(asesor_id, el.destinatarioSelect);
+    }else alert(res.error || 'Error guardando referenciado');
+  });
+
+  // --------- DESTINATARIOS (asesor + referenciados) ---------
+  async function cargarDestinatarios(asesor_id, selectEl){
+    if(!asesor_id){ selectEl.innerHTML='<option value="">Selecciona…</option>'; return; }
+    const list = await apiGet(`/api/asesores/${asesor_id}/destinatarios`);
+    // value como "asesor:ID" o "referenciado:ID"
+    selectEl.innerHTML = '<option value="">Selecciona…</option>' +
+      list.map(x => `<option value="${x.tipo}:${x.id}">${x.display}</option>`).join('');
+  }
+  el.asesorSelect?.addEventListener('change', ()=> cargarDestinatarios(el.asesorSelect.value, el.destinatarioSelect));
+
+  // --------- ASIGNACIONES ---------
+  async function cargarAsignacionesRecientes(){
+    const list = await apiGet('/api/asignaciones/recientes');
+    el.tablaAsigs.innerHTML = list
+      .map(x=>`<tr><td class="mono">${x.folio}</td><td>${x.asesor_nombre}</td><td>${x.asignado_a}</td><td>${new Date(x.assigned_at).toLocaleString()}</td></tr>`)
+      .join('');
+  }
+
+  el.btnAsignar?.addEventListener('click', async ()=>{
+    const folio = (el.folioAsignar.value||'').trim();
+    const asesor_id = el.asesorSelect.value;
+    const dest = el.destinatarioSelect.value; // "asesor:12" o "referenciado:34"
+    if(!folio || !asesor_id || !dest) return alert('Completa los datos para asignar.');
+    let referenciado_id = null;
+    if(dest.startsWith('referenciado:')) referenciado_id = dest.split(':')[1];
+
+    const res = await apiPost('/api/asignaciones', {folio, asesor_id, referenciado_id});
+    if(res.ok){ el.folioAsignar.value=''; await cargarAsignacionesRecientes(); }
+    else alert(res.error || 'Error guardando la asignación');
+  });
+
+  // --------- FILTRO ---------
+  el.filtroAsesor?.addEventListener('change', async ()=>{
+    const asesor_id = el.filtroAsesor.value;
+    if(!asesor_id){
+      el.filtroReferenciado.innerHTML = '<option value="">Todos</option>';
+      el.filtroReferenciado.disabled = true;
+      return;
+    }
+    const list = await apiGet(`/api/asesores/${asesor_id}/referenciados`);
+    el.filtroReferenciado.innerHTML = '<option value="">Todos</option>' +
+      list.map(r=>`<option value="${r.id}">${r.display}</option>`).join('');
+    el.filtroReferenciado.disabled = list.length === 0;
+  });
+
+  el.btnFiltrar?.addEventListener('click', async ()=>{
+    const p = new URLSearchParams();
+    if(el.filtroAsesor.value) p.set('asesor_id', el.filtroAsesor.value);
+    if(el.filtroReferenciado.value) p.set('referenciado_id', el.filtroReferenciado.value);
+    const list = await apiGet('/api/folios?' + p.toString());
+    el.tablaFiltro.innerHTML = list
+      .map(x=>`<tr><td class="mono">${x.folio}</td><td>${x.asesor_nombre}</td><td>${x.asignado_a||''}</td><td>${new Date(x.assigned_at).toLocaleString()}</td></tr>`)
+      .join('');
+  });
+
+  // Arranque
+  cargarAsesores();
+  cargarAsignacionesRecientes();
+})();
+</script>
 </body>
 </html>

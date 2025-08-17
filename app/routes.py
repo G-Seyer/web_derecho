@@ -179,14 +179,14 @@ def _upsert_arrendador_datos(datos: dict):
             direccion, tipo_inmueble, superficie_terreno, metros_construidos,
             habitaciones, banos, estacionamientos, uso_suelo, cuenta_predial,
             cuenta_agua, servicios_pagan, caracteristicas, inventario,
-            precio_renta, fecha_inicio_renta, fecha_firma_contrato, lugar_nacimiento, fecha_nacimiento, updated_at
+            precio_renta, fecha_inicio_renta, fecha_firma_contrato, updated_at
         ) VALUES (
             :folio, :nombre, :correo, :direccion_actual, :rfc, :curp, :telefono,
             :banco, :titular_cuenta, :cuenta_bancaria, :clabe_interbancaria,
             :direccion, :tipo_inmueble, :superficie_terreno, :metros_construidos,
             :habitaciones, :banos, :estacionamientos, :uso_suelo, :cuenta_predial,
             :cuenta_agua, :servicios_pagan, :caracteristicas, :inventario,
-            :precio_renta, :fecha_inicio_renta, :fecha_firma_contrato, :lugar_nacimiento, :fecha_nacimiento, now()
+            :precio_renta, :fecha_inicio_renta, :fecha_firma_contrato, now()
         )
         ON CONFLICT (folio) DO UPDATE SET
             nombre               = EXCLUDED.nombre,
@@ -215,8 +215,6 @@ def _upsert_arrendador_datos(datos: dict):
             precio_renta         = EXCLUDED.precio_renta,
             fecha_inicio_renta   = EXCLUDED.fecha_inicio_renta,
             fecha_firma_contrato = EXCLUDED.fecha_firma_contrato,
-            lugar_nacimiento     = EXCLUDED.lugar_nacimiento,
-            fecha_nacimiento     = EXCLUDED.fecha_nacimiento,
             updated_at           = now();
     """)
     db.session.execute(sql, datos)
@@ -340,8 +338,6 @@ def subir_propietario():
         "precio_renta": form.get("precio_renta"),
         "fecha_inicio_renta": form.get("fecha_inicio_renta"),
         "fecha_firma_contrato": form.get("fecha_firma_contrato"),
-        "lugar_nacimiento": form.get("lugar_nacimiento"),
-        "fecha_nacimiento": (form.get("fecha_nacimiento") or None),
     }
     requeridos = [
         "nombre","correo","direccion_actual","rfc","curp","telefono",
@@ -794,3 +790,189 @@ def contacto():
 
     # GET
     return render_template("contacto.html")
+
+
+# =====================================================
+# ==============   API Asesores (Administrador)  ======
+# =====================================================
+
+def _row_to_dict(row):
+    try:
+        return dict(row._mapping)  # SQLAlchemy 1.4/2.0 Row
+    except Exception:
+        return dict(row)
+
+# ---------- Asesores ----------
+@bp.route("/api/asesores", methods=["GET", "POST"])
+def api_asesores():
+    if request.method == "GET":
+        sql = text("""
+            SELECT id, nombre, created_at
+            FROM public.asesores
+            ORDER BY nombre ASC
+        """)
+        res = db.session.execute(sql).all()
+        return jsonify([_row_to_dict(r) for r in res]), 200
+
+    # POST crear/asegurar asesor (upsert por nombre)
+    data = request.get_json(silent=True) or request.form or {}
+    nombre = (data.get("nombre") or "").strip()
+    if not nombre:
+        return jsonify({"ok": False, "error": "nombre requerido"}), 400
+
+    try:
+        sql = text("""
+            INSERT INTO public.asesores(nombre)
+            VALUES (:nombre)
+            ON CONFLICT (nombre)
+            DO UPDATE SET nombre = EXCLUDED.nombre
+            RETURNING id, nombre, created_at
+        """)
+        row = db.session.execute(sql, {"nombre": nombre}).first()
+        db.session.commit()
+        return jsonify({"ok": True, "asesor": _row_to_dict(row)}), 200
+    except Exception as e:
+        db.session.rollback()
+        app.logger.exception("api_asesores POST error: %s", e)
+        return jsonify({"ok": False, "error": "error guardando asesor"}), 500
+
+# ---------- Referenciados ----------
+@bp.route("/api/referenciados", methods=["POST"])
+def api_referenciados_add():
+    data = request.get_json(silent=True) or request.form or {}
+    asesor_id = data.get("asesor_id")
+    nombre = (data.get("nombre") or "").strip()
+    if not asesor_id or not nombre:
+        return jsonify({"ok": False, "error": "asesor_id y nombre requeridos"}), 400
+
+    try:
+        sql = text("""
+            INSERT INTO public.asesores_referenciados(asesor_id, nombre)
+            VALUES (:asesor_id, :nombre)
+            ON CONFLICT (asesor_id, nombre)
+            DO NOTHING
+            RETURNING id, asesor_id, nombre, created_at
+        """)
+        row = db.session.execute(sql, {"asesor_id": int(asesor_id), "nombre": nombre}).first()
+        if row is None:
+            sql2 = text("""
+                SELECT id, asesor_id, nombre, created_at
+                FROM public.asesores_referenciados
+                WHERE asesor_id=:asesor_id AND nombre=:nombre
+            """)
+            row = db.session.execute(sql2, {"asesor_id": int(asesor_id), "nombre": nombre}).first()
+        db.session.commit()
+
+        sql_disp = text("""
+            SELECT UPPER(SUBSTRING(a.nombre FROM 1 FOR 1)) || '. ' || :nombre AS display
+            FROM public.asesores a WHERE a.id=:asesor_id
+        """)
+        disp = db.session.execute(sql_disp, {"asesor_id": int(asesor_id), "nombre": nombre}).scalar()
+        out = _row_to_dict(row); out["display"] = disp
+        return jsonify({"ok": True, "referenciado": out}), 200
+    except Exception as e:
+        db.session.rollback()
+        app.logger.exception("api_referenciados POST error: %s", e)
+        return jsonify({"ok": False, "error": "error guardando referenciado"}), 500
+
+@bp.route("/api/asesores/<int:asesor_id>/referenciados", methods=["GET"])
+def api_referenciados_list(asesor_id: int):
+    sql = text("""
+        SELECT r.id, r.asesor_id, r.nombre,
+               (UPPER(SUBSTRING(a.nombre FROM 1 FOR 1)) || '. ' || r.nombre) AS display,
+               r.created_at
+        FROM public.asesores_referenciados r
+        JOIN public.asesores a ON a.id = r.asesor_id
+        WHERE r.asesor_id=:asesor_id
+        ORDER BY r.nombre ASC
+    """)
+    res = db.session.execute(sql, {"asesor_id": asesor_id}).all()
+    return jsonify([_row_to_dict(r) for r in res]), 200
+
+# ---------- Destinatarios ----------
+@bp.route("/api/asesores/<int:asesor_id>/destinatarios", methods=["GET"])
+def api_destinatarios(asesor_id: int):
+    sql = text("""
+        SELECT * FROM public.v_destinatarios
+        WHERE asesor_id = :asesor_id
+        ORDER BY (tipo != 'asesor'), display ASC
+    """)
+    res = db.session.execute(sql, {"asesor_id": asesor_id}).all()
+    return jsonify([_row_to_dict(r) for r in res]), 200
+
+# ---------- Asignaciones de folios ----------
+@bp.route("/api/asignaciones", methods=["POST"])
+def api_asignar_folio():
+    data = request.get_json(silent=True) or request.form or {}
+    folio = (data.get("folio") or "").strip()
+    asesor_id = data.get("asesor_id")
+    referenciado_id = data.get("referenciado_id")
+
+    if not folio or not asesor_id:
+        return jsonify({"ok": False, "error": "folio y asesor_id son requeridos"}), 400
+
+    try:
+        if referenciado_id:
+            sql_chk = text("""
+                SELECT 1 FROM public.asesores_referenciados
+                WHERE id=:rid AND asesor_id=:aid
+            """)
+            ok = db.session.execute(sql_chk, {"rid": int(referenciado_id), "aid": int(asesor_id)}).first()
+            if not ok:
+                return jsonify({"ok": False, "error": "El referenciado no pertenece al asesor elegido"}), 400
+
+        sql_up = text("""
+            INSERT INTO public.folios_asignaciones(folio, asesor_id, referenciado_id)
+            VALUES (:folio, :asesor_id, :referenciado_id)
+            ON CONFLICT (folio)
+            DO UPDATE SET asesor_id=EXCLUDED.asesor_id,
+                          referenciado_id=EXCLUDED.referenciado_id,
+                          assigned_at=now()
+            RETURNING id
+        """)
+        row = db.session.execute(sql_up, {
+            "folio": folio,
+            "asesor_id": int(asesor_id),
+            "referenciado_id": int(referenciado_id) if referenciado_id else None
+        }).first()
+        db.session.commit()
+        return jsonify({"ok": True, "id": row.id if row else None}), 200
+    except Exception as e:
+        db.session.rollback()
+        app.logger.exception("api_asignar_folio POST error: %s", e)
+        return jsonify({"ok": False, "error": "error guardando asignación"}), 500
+
+@bp.route("/api/asignaciones/recientes", methods=["GET"])
+def api_asignaciones_recientes():
+    sql = text("""
+        SELECT id, folio, asesor_id, asesor_nombre, referenciado_id, asignado_a, assigned_at
+        FROM public.v_folios_asignados
+        ORDER BY assigned_at DESC
+        LIMIT 50
+    """)
+    res = db.session.execute(sql).all()
+    return jsonify([_row_to_dict(r) for r in res]), 200
+
+# ---------- Filtro de folios ----------
+@bp.route("/api/folios", methods=["GET"])
+def api_filtrar_folios():
+    asesor_id = request.args.get("asesor_id")
+    referenciado_id = request.args.get("referenciado_id")
+
+    base = """
+        SELECT id, folio, asesor_id, asesor_nombre, referenciado_id, asignado_a, assigned_at
+        FROM public.v_folios_asignados
+        WHERE 1=1
+    """
+    params = {}
+    if asesor_id:
+        base += " AND asesor_id = :asesor_id"
+        params["asesor_id"] = int(asesor_id)
+    if referenciado_id:
+        base += " AND referenciado_id = :referenciado_id"
+        params["referenciado_id"] = int(referenciado_id)
+
+    base += " ORDER BY assigned_at DESC"
+    sql = text(base)
+    res = db.session.execute(sql, params).all()
+    return jsonify([_row_to_dict(r) for r in res]), 200
