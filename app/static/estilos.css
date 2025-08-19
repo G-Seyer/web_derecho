@@ -755,6 +755,17 @@ html, body {
   overflow-x: hidden;
 }
 
+  /* Títulos más delgados en la página de políticas */
+  .politica-box h1 { 
+    font-weight: 600 !important;              /* antes 800 */
+    font-size: clamp(1.8rem, 3vw, 2.1rem);
+    letter-spacing: .1px;
+  }
+  .politica-box h2 { 
+    font-weight: 500 !important;              /* antes 700 */
+    font-size: clamp(1.1rem, 2.2vw, 1.3rem);
+  }
+
 /*BOTON PRINCIPAL*/
 .btn-principal {
   background-color: #007bff;

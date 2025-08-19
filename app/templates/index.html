@@ -8,7 +8,44 @@
   </title>
   <link href="{{ url_for('static', filename='estilos.css') }}" rel="stylesheet"/>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
- </head>
+ 
+<style>
+/* === Paquetes: diseño claro de una columna === */
+.paquetes-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 28px;
+}
+.paquete{
+  display:flex;
+  flex-direction:column;
+  height:100%;
+  padding:1.25rem 1.25rem 1rem;
+  border-radius:18px;
+}
+.paquete h3{ font-size:1.15rem; margin-bottom:.75rem; }
+.paquete ul{ list-style:none; padding-left:0; margin:0; }
+.paquete ul li{
+  display:flex;
+  align-items:flex-start;
+  gap:.6rem;
+  padding:.45rem 0;
+  line-height:1.35;
+  border-top:1px dashed rgba(0,0,0,.12);
+}
+.paquete ul li:first-child{
+  border-top:0;
+  background: rgba(13, 110, 253, .06);
+  border:1px solid rgba(13, 110, 253, .12);
+  padding:.55rem .65rem;
+  border-radius:10px;
+  margin-bottom:.35rem;
+}
+.paquete ul li .ico{ width:1.25rem; text-align:center; flex:0 0 auto; }
+.paquete .boton-paquete{ margin-top:auto; }
+</style>
+
+</head>
  <body>
   <!-- HERO CON LOGO Y MENÚ -->
 <header class="barra-superior">
@@ -145,10 +182,10 @@
         <h3>🧑‍💼 Propietario (Arrendador)</h3>
         <ul>
           <li>🪪 Identificación oficial</li>
-          <li>🏠 Comprobante de domicilio</li>
-          <li>📄 Escritura del inmueble</li>
+          <li><span class="ico">🏠</span> Comprobante de domicilio</li>
+          <li><span class="ico">📄</span> Escritura del inmueble</li>
           <li>📑 Contrato o poder notarial</li>
-          <li>📘 Constancia del folio real</li>
+          <li><span class="ico">📘</span> Constancia del folio real</li>
         </ul>
 
         <!-- botón debajo -->
@@ -165,10 +202,10 @@
         <h3>👤 Inquilino (Arrendatario)</h3>
         <ul>
           <li>🪪 Identificación oficial</li>
-          <li>🏠 Comprobante de domicilio</li>
+          <li><span class="ico">🏠</span> Comprobante de domicilio</li>
           <li>💰 Comprobante de ingresos</li>
-          <li>📝 Llenado de solicitud de arrendamiento</li>
-          <li>🧾 Aval</li>
+          <li><span class="ico">📝</span> Solicitud de arrendamiento</li>
+          <li><span class="ico">🧾</span> Aval</li>
         </ul>
 
         <!-- botón debajo -->
@@ -228,26 +265,25 @@
       Póliza Jurídica Tradicional
      </h3>
      <ul>
-      <li>
-       📄 Contrato de arrendamiento personalizado
+      <li><span class="ico">📄</span> Contrato de arrendamiento personalizado
       </li>
-      <li>
-       🔍 Investigación de historial del inquilino
+      <li><span class="ico">🔍</span> Investigación de historial del inquilino, obligado y aval
       </li>
-      <li>
-       ⚖️ Asesoría legal básica durante el arrendamiento
+      <li><span class="ico">🧾</span> Revisión de antecedentes Legales del inquilino a nivel estatal (en el lugar del inmueble arrendado)
+      </li>
+      <li><span class="ico">⚖️</span> Asesoría legal básica durante el arrendamiento
       </li>
       <li>
        📑 Revisión de documentos de las partes
       </li>
-      <li>
-       📞 Atención vía telefónica y correo
+      <li><span class="ico">📞</span> Atención vía telefónica y correo
       </li>
       <li>
        🏛️ Acompañamiento en firma de contrato presencial
       </li>
-      <li>
-       ⚠️ Gestión en caso de incumplimiento o adeudo
+      <li><span class="ico">⚠️</span> Gestión en caso de incumplimiento o adeudo
+      </li>
+      <li><span class="ico">🏠</span> Recuperación de la posesión del inmueble
       </li>
       <li>
        📲 Atención personalizada por WhatsApp
@@ -257,25 +293,38 @@
       Solicitar Tradicional
      </a>
     </div>
+    
+    <div class="paquete intermedio">
+     <h3>
+      Póliza Jurídica Intermedia
+     </h3>
+     <ul>
+      <li><span class="ico">✔</span> Incluye todo lo de la Póliza Tradicional</li>
+      <li><span class="ico">🧾</span> Revisión de antecedentes legales del inquilino a nivel nacional</li>
+      <li><span class="ico">🧾</span> Investigación de antecedentes legales del obligado a nivel nacional</li>
+      <li><span class="ico">📘</span> Búsqueda en el RPP del folio Real de la propiedad en garantía</li>
+      <li><span class="ico">💳</span> Recuperación de rentas vencidas vía extrajudicial y judicialmente en caso de requerirse</li>
+     </ul>
+     <a class="boton-paquete" href="https://wa.me/5551882212?text=Hola,%20quiero%20solicitar%20el%20paquete%20Intermedio" target="_blank">
+      Solicitar Intermedia
+     </a>
+    </div>
+
     <div class="paquete destacado">
      <h3>
       Póliza Jurídica Plus ⭐
      </h3>
      <ul>
-      <li>
-       ✔ Todo lo incluido en el paquete Tradicional
+      <li><span class="ico">✔</span> Incluye todo lo de las pólizas Tradicional e Intermedia
       </li>
-      <li>
-       🏢 Administración del inmueble arrendado
+      <li><span class="ico">🏢</span> Administración del inmueble arrendado
       </li>
-      <li>
-       💳 Cobro de rentas y pago en cuenta del propietario
+      <li><span class="ico">💳</span> Cobro de rentas y pago en cuenta del propietario
       </li>
       <li>
        🛠️ Resolver temas de mantenimiento con el inquilino
       </li>
-      <li>
-       🤝 Atención al inquilino ante cualquier duda o problema
+      <li><span class="ico">🤝</span> Atención al inquilino ante cualquier duda o problema
       </li>
       <li>
        🚨 Prioridad en tiempos de respuesta legal
