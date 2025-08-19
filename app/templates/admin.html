@@ -209,9 +209,9 @@ let folioActual = '';
 frmBuscar.addEventListener('submit', async (e)=>{
   e.preventDefault();
   const input = document.getElementById('folioBuscar');
-  const folio = input.value.trim().toUpperCase().replace(/\s+/g,'');  // <— limpia espacios
+  const folio = input.value.trim().toUpperCase().replace(/\s+/g,'');  // limpia espacios
 
-  if (!/^AEPRA-\d{6}-[A-Z0-9]{4}$/.test(folio)) {  // <— una sola barra
+  if (!/^AEPRA-\d{6}-[A-Z0-9]{4}$/.test(folio)) {
     input.reportValidity();
     return;
   }
@@ -228,7 +228,7 @@ frmBuscar.addEventListener('submit', async (e)=>{
   document.getElementById('sumTot').textContent = sum.total_docs ?? 0;
   resumenWrap.classList.remove('d-none');
 
-  // Póliza
+  // Póliza fechas
   const pol = j.poliza || {};
   document.getElementById('polInicio').value = pol.fecha_inicio || '';
   document.getElementById('polFin').value = pol.fecha_fin || '';
@@ -246,7 +246,7 @@ frmBuscar.addEventListener('submit', async (e)=>{
   docsWrap.classList.remove('d-none');
 });
 
-// -------- Guardar póliza --------
+// -------- Guardar fechas de póliza --------
 document.getElementById('frmPoliza').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const fi = document.getElementById('polInicio').value;
@@ -299,7 +299,7 @@ frmFiltro.addEventListener('submit', async (e)=>{
 <div class="row">
   <div class="col-12 col-md-11 col-lg-9 col-xl-8 mx-auto px-2">
 
-<!-- 1) Registro de Asesores -->
+    <!-- 1) Registro de Asesores -->
     <div class="card mb-4">
       <div class="card-body">
         <h2 class="h5 mb-3">Registro de asesores</h2>
@@ -387,6 +387,46 @@ frmFiltro.addEventListener('submit', async (e)=>{
       </div>
     </div>
 
+    <!-- 3.1) Asignar tipo de póliza a un folio (ÚNICO) -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Asignar tipo de póliza</h2>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-5">
+            <label class="form-label" for="poliza_folio">Folio</label>
+            <input id="poliza_folio" class="form-control mono" placeholder="AEPRA-YYYYMM-XXXX">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="poliza_tipo">Tipo de póliza</label>
+            <select id="poliza_tipo" class="form-select">
+              <option value="">Selecciona…</option>
+              <option value="Tradicional">Tradicional</option>
+              <option value="Intermedia">Intermedia</option>
+              <option value="Plus">Plus</option>
+              <option value="Mascota">Mascota</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <button id="btnGuardarPoliza" class="btn btn-primary w-100">Guardar</button>
+          </div>
+        </div>
+
+        <hr class="my-4">
+
+        <h6 class="mb-2">Asignaciones de póliza recientes</h6>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr><th>Folio</th><th>Póliza</th><th>Asignado</th></tr>
+            </thead>
+            <tbody id="tabla-polizas-recientes">
+              <tr><td colspan="3" class="text-muted">Sin datos aún</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- 4) Filtro de folios por asesor/referenciado -->
     <div class="card mb-5">
       <div class="card-body">
@@ -416,6 +456,7 @@ frmFiltro.addEventListener('submit', async (e)=>{
         </div>
       </div>
     </div>
+
   </div>
 </div>
 
@@ -577,6 +618,55 @@ frmFiltro.addEventListener('submit', async (e)=>{
   // Arranque
   cargarAsesores();
   cargarAsignacionesRecientes();
+
+  // ---------- Póliza: asignar tipo a folio ----------
+  const polizaFolio = document.getElementById('poliza_folio');
+  const polizaTipo  = document.getElementById('poliza_tipo');
+  const polizaBtn   = document.getElementById('btnGuardarPoliza');
+  const polizaTabla = document.getElementById('tabla-polizas-recientes');
+
+  async function cargarPolizasRecientes(){
+    try{
+      const list = await apiGet('/api/folios/poliza/recientes');
+      if(!Array.isArray(list) || !list.length){
+        if(polizaTabla) polizaTabla.innerHTML = '<tr><td colspan="3" class="text-muted">Sin datos</td></tr>';
+        return;
+      }
+      if(polizaTabla){
+        polizaTabla.innerHTML = list.map(x => `
+          <tr>
+            <td class="mono">${x.folio}</td>
+            <td>${x.tipo}</td>
+            <td>${new Date(x.assigned_at).toLocaleString()}</td>
+          </tr>
+        `).join('');
+      }
+    }catch(e){
+      if(polizaTabla){
+        polizaTabla.innerHTML = '<tr><td colspan="3" class="text-muted">Disponible cuando se actualice el backend</td></tr>';
+      }
+    }
+  }
+
+  async function guardarTipoPoliza(){
+    const folio = (polizaFolio?.value||'').trim().toUpperCase();
+    const tipo  = (polizaTipo?.value||'').trim();
+    if(!folio || !tipo){
+      alert('Completa folio y tipo de póliza');
+      return;
+    }
+    const res = await apiPost('/api/folios/poliza', { folio, tipo });
+    if(res && res.ok){
+      if(polizaFolio) polizaFolio.value='';
+      if(polizaTipo)  polizaTipo.value='';
+      await cargarPolizasRecientes();
+    }else{
+      alert((res && res.error) || 'No se pudo guardar la póliza');
+    }
+  }
+
+  polizaBtn?.addEventListener('click', guardarTipoPoliza);
+  cargarPolizasRecientes();
 })();
 </script>
 </body>

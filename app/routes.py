@@ -976,3 +976,80 @@ def api_filtrar_folios():
     sql = text(base)
     res = db.session.execute(sql, params).all()
     return jsonify([_row_to_dict(r) for r in res]), 200
+
+
+# ---------- Asignacion Folios / Poliza ----------
+
+# ---------- Asignacion Folios / Poliza ----------
+
+# Tipos válidos y patrón de folio
+ALLOWED_TIPOS_POLIZA = {"Tradicional", "Intermedia", "Plus", "Mascota"}
+FOLIO_RE = re.compile(r"^AEPRA-\d{6}-[A-Z0-9]{4}$")
+
+@bp.route("/api/folios/poliza", methods=["POST"])
+def api_folios_poliza_upsert():
+    """
+    Guarda/actualiza el tipo de póliza para un folio.
+    Requiere que exista la tabla public.folios_poliza (con UNIQUE(folio))
+    y el tipo ENUM poliza_tipo ('Tradicional','Intermedia','Plus','Mascota').
+    """
+    data = request.get_json(silent=True) or request.form or {}
+    folio = (data.get("folio") or "").strip().upper()
+    tipo  = (data.get("tipo") or "").strip().title()
+
+    if not folio or not FOLIO_RE.match(folio):
+        return jsonify({"ok": False, "error": "Folio inválido. Formato esperado: AEPRA-YYYYMM-XXXX"}), 400
+    if tipo not in ALLOWED_TIPOS_POLIZA:
+        return jsonify({"ok": False, "error": f"Tipo inválido. Usa: {', '.join(sorted(ALLOWED_TIPOS_POLIZA))}"}), 400
+
+    sql = text("""
+        INSERT INTO public.folios_poliza (folio, tipo)
+        VALUES (:folio, CAST(:tipo AS poliza_tipo))
+        ON CONFLICT (folio) DO UPDATE
+           SET tipo = EXCLUDED.tipo,
+               assigned_at = now()
+        RETURNING folio, tipo::text AS tipo, assigned_at;
+    """)
+
+    try:
+        row = db.session.execute(sql, {"folio": folio, "tipo": tipo}).mappings().first()
+        db.session.commit()
+        return jsonify({
+            "ok": True,
+            "folio": row["folio"],
+            "tipo": row["tipo"],
+            "assigned_at": row["assigned_at"].isoformat() if hasattr(row["assigned_at"], "isoformat") else row["assigned_at"]
+        })
+    except Exception as e:
+        db.session.rollback()
+        app.logger.exception("api_folios_poliza_upsert error: %s", e)
+        return jsonify({"ok": False, "error": "Error guardando tipo de póliza"}), 500
+
+
+@bp.route("/api/folios/poliza/recientes", methods=["GET"])
+def api_folios_poliza_recientes():
+    """
+    Devuelve las últimas 50 asignaciones de tipo de póliza.
+    """
+    sql = text("""
+        SELECT folio, tipo::text AS tipo, assigned_at
+        FROM public.folios_poliza
+        ORDER BY assigned_at DESC
+        LIMIT 50;
+    """)
+    try:
+        rows = db.session.execute(sql).mappings().all()
+        out = []
+        for r in rows:
+            assigned = r["assigned_at"]
+            out.append({
+                "folio": r["folio"],
+                "tipo": r["tipo"],
+                "assigned_at": assigned.isoformat() if hasattr(assigned, "isoformat") else assigned
+            })
+        return jsonify(out)
+    except Exception as e:
+        app.logger.exception("api_folios_poliza_recientes error: %s", e)
+        return jsonify([]), 200
+
+
