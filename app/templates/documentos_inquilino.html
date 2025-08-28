@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Subir documentos – Inquilino</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}?v=9">
+  <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}?v=10">
   <style>
     .card.full{width:100%;max-width:100%}
     .page-docs .form-label{display:block;margin-bottom:.35rem}
@@ -16,20 +16,29 @@
     .doc-status{display:flex;align-items:center;gap:.5rem}
     .doc-dot{width:.6rem;height:.6rem;border-radius:50%;background:#adb5bd;display:inline-block}
     .doc-card.ok .doc-dot{background:#198754}
+
+    /* Fallback de collapse para el menú móvil (sin Bootstrap JS) */
+    #navInq.collapse:not(.show){ display: none; }
+    #navInq.collapse.show{ display: block; }
   </style>
 </head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
   <div class="container">
     <a class="navbar-brand" href="/">AEPRA</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navInq" aria-controls="navInq" aria-expanded="false" aria-label="Toggle navigation">
+
+    <!-- Botón hamburguesa (móvil) -->
+    <button class="navbar-toggler" type="button" aria-label="Abrir menú" onclick="toggleNavInq()">
       <span class="navbar-toggler-icon"></span>
     </button>
+
+    <!-- Menú colapsable -->
     <div class="collapse navbar-collapse" id="navInq">
       <ul class="navbar-nav ms-auto">
         <li class="nav-item"><a class="nav-link" href="/">Inicio</a></li>
         <li class="nav-item"><a class="nav-link" href="/#servicios">Servicios</a></li>
         <li class="nav-item"><a class="nav-link" href="{{ url_for('routes.contacto') }}">Contacto</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('routes.politicas') }}">Políticas</a></li>
       </ul>
     </div>
   </div>
@@ -83,11 +92,9 @@
           </div>
           <div class="col-md-4">
             <label class="form-label">Lugar y fecha de nacimiento</label>
-              <input type="text" name="lugar_nacimiento"
-                    class="form-control folio-locked rounded-bottom-0" disabled>
-
-              <input type="date" name="fecha_nacimiento"
-                    class="form-control folio-locked mt-0 rounded-top-0 border-top-0" disabled></div>
+            <input type="text" name="lugar_nacimiento" class="form-control folio-locked rounded-bottom-0" disabled>
+            <input type="date" name="fecha_nacimiento" class="form-control folio-locked mt-0 rounded-top-0 border-top-0" disabled>
+          </div>
           <div class="col-md-4">
             <label class="form-label">Teléfono</label>
             <input type="tel" name="telefono" class="form-control folio-locked" placeholder="55XXXXXXXX" disabled>
@@ -272,22 +279,32 @@
       <div class="doc-card" data-field="identificacion">
         <div class="fw-semibold mb-1">🪪 Copia de identificación oficial vigente</div>
         <input id="identificacion" type="file" name="identificacion" accept=".pdf,image/*" required class="folio-locked" disabled>
-        <div class="doc-file small text-secondary mt-2">Sin archivo</div>
+        <div class="doc-file small text-secondary mt-2" data-for="identificacion">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
       <div class="doc-card" data-field="comprobante_domicilio_anterior_inquilino">
         <div class="fw-semibold mb-1">🏠 Comprobante de domicilio del inmueble donde vivía anteriormente (inquilino)</div>
-        <input id="comprobante_domicilio_anterior_inquilino" type="file" name="comprobante_domicilio_anterior_inquilino" accept=".pdf,image/*" required class="folio-locked" disabled>
-        <div class="doc-file small text-secondary mt-2">Sin archivo</div>
+        <input id="dom_ant_inq" type="file" name="comprobante_domicilio_anterior_inquilino" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <div class="doc-file small text-secondary mt-2" data-for="dom_ant_inq">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
-      
+      <!-- 3 inputs (uno por mes) para ingresos del INQUILINO -->
       <div class="doc-card" data-field="comprobante_ingresos_inquilino">
         <div class="fw-semibold mb-1">💼 Comprobante de ingresos (últimos 3 meses) – Inquilino</div>
-        <input id="comprobante_ingresos_inquilino" type="file" name="comprobante_ingresos_inquilino" accept=".pdf,image/*" required class="folio-locked" disabled>
-        <div class="doc-file small text-secondary mt-2">Sin archivo</div>
+        <label class="form-label small">Mes 1 (más reciente)</label>
+        <input id="ing_inq_m1" type="file" name="comprobante_ingresos_inquilino_mes1" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <div class="doc-file small text-secondary mt-1" data-for="ing_inq_m1">Sin archivo</div>
+
+        <label class="form-label small mt-2">Mes 2</label>
+        <input id="ing_inq_m2" type="file" name="comprobante_ingresos_inquilino_mes2" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <div class="doc-file small text-secondary mt-1" data-for="ing_inq_m2">Sin archivo</div>
+
+        <label class="form-label small mt-2">Mes 3</label>
+        <input id="ing_inq_m3" type="file" name="comprobante_ingresos_inquilino_mes3" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <div class="doc-file small text-secondary mt-1" data-for="ing_inq_m3">Sin archivo</div>
+
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
@@ -296,56 +313,66 @@
 
       <div class="doc-card" data-field="identificacion_oficial_aval">
         <div class="fw-semibold mb-1">🪪 Copia de identificación oficial vigente del aval</div>
-        <input id="identificacion_oficial_aval" type="file" name="identificacion_oficial_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
-        <div class="doc-file small text-secondary mt-2">Sin archivo</div>
+        <input id="id_aval" type="file" name="identificacion_oficial_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <div class="doc-file small text-secondary mt-2" data-for="id_aval">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
       
       <div class="doc-card" data-field="predial_inmueble_aval">
         <div class="fw-semibold mb-1">🧾 Copia de predial del inmueble del aval</div>
-        <input id="predial_inmueble_aval" type="file" name="predial_inmueble_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
-        <div class="doc-file small text-secondary mt-2">Sin archivo</div>
+        <input id="pred_av" type="file" name="predial_inmueble_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <div class="doc-file small text-secondary mt-2" data-for="pred_av">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
       <div class="doc-card" data-field="escritura_inmueble_aval">
         <div class="fw-semibold mb-1">📄 Copia de escritura del inmueble del aval</div>
-        <input id="escritura_inmueble_aval" type="file" name="escritura_inmueble_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
-        <div class="doc-file small text-secondary mt-2">Sin archivo</div>
+        <input id="esc_av" type="file" name="escritura_inmueble_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <div class="doc-file small text-secondary mt-2" data-for="esc_av">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
       <div class="doc-card" data-field="domicilio_inmueble_aval">
         <div class="fw-semibold mb-1">🏠 Comprobante de domicilio del inmueble del aval</div>
-        <input id="domicilio_inmueble_aval" type="file" name="domicilio_inmueble_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
-        <div class="doc-file small text-secondary mt-2">Sin archivo</div>
+        <input id="dom_av" type="file" name="domicilio_inmueble_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <div class="doc-file small text-secondary mt-2" data-for="dom_av">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
       <div class="doc-card" data-field="folio_real_aval">
         <div class="fw-semibold mb-1">📘 Constancia de folio real del inmueble del aval</div>
-        <input id="folio_real_aval" type="file" name="folio_real_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
-        <div class="doc-file small text-secondary mt-2">Sin archivo</div>
+        <input id="folio_real_av" type="file" name="folio_real_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <div class="doc-file small text-secondary mt-2" data-for="folio_real_av">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
+      <!-- 3 inputs (uno por mes) para ingresos del AVAL -->
       <div class="doc-card" data-field="comprobante_ingresos_aval">
         <div class="fw-semibold mb-1">💼 Comprobante de ingresos (últimos 3 meses) – Aval</div>
-        <input id="comprobante_ingresos_aval" type="file" name="comprobante_ingresos_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
-        <div class="doc-file small text-secondary mt-2">Sin archivo</div>
+        <label class="form-label small">Mes 1 (más reciente)</label>
+        <input id="ing_av_m1" type="file" name="comprobante_ingresos_aval_mes1" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <div class="doc-file small text-secondary mt-1" data-for="ing_av_m1">Sin archivo</div>
+
+        <label class="form-label small mt-2">Mes 2</label>
+        <input id="ing_av_m2" type="file" name="comprobante_ingresos_aval_mes2" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <div class="doc-file small text-secondary mt-1" data-for="ing_av_m2">Sin archivo</div>
+
+        <label class="form-label small mt-2">Mes 3</label>
+        <input id="ing_av_m3" type="file" name="comprobante_ingresos_aval_mes3" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <div class="doc-file small text-secondary mt-1" data-for="ing_av_m3">Sin archivo</div>
+
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
-
 
       <div class="doc-card" data-field="contrato_poder">
         <div class="fw-semibold mb-1">📑 Contrato o poder notarial (si es persona moral)</div>
         <div class="form-check mb-2">
-  <input class="form-check-input folio-locked" type="checkbox" id="pfisica" disabled>
-  <label class="form-check-label" for="pfisica">En caso de ser persona física, marca esta casilla.</label>
-</div>
-<input id="contrato_poder" type="file" name="contrato_poder" accept=".pdf,image/*" class="folio-locked" disabled>
-        <div class="form-text">Opcional para persona física.</div>
-        <div class="doc-file small text-secondary mt-2">Sin archivo</div>
+          <input class="form-check-input" type="checkbox" id="pfisica">
+          <label class="form-check-label" for="pfisica">En caso de ser persona física, marca esta casilla.</label>
+        </div>
+        <input id="contrato_poder" type="file" name="contrato_poder" accept=".pdf,image/*" class="folio-locked" >
+        <div class="form-text">Requerido por defecto (persona moral). Si marcas “persona física”, se desactiva.</div>
+        <div class="doc-file small text-secondary mt-2" data-for="contrato_poder">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
     </div>
@@ -357,21 +384,31 @@
   </form>
 </div>
 
+<!-- VALIDACIONES ESPECÍFICAS (correo libre + dirección con orden) -->
 <script>
   (function(){
     const form = document.getElementById('form-inquilino');
     const email = form.querySelector('input[name="correo"]');
-    const dir = form.querySelector('input[name="direccion"]');
+    const dir   = form.querySelector('input[name="direccion"]');
 
-    function validaGmail(){
-      if(!/@gmail\.com\s*$/i.test(email.value.trim())) email.setCustomValidity('El correo debe ser @gmail.com');
-      else email.setCustomValidity('');
+    // Correo: aceptamos cualquier dominio; usamos la val. nativa de type="email"
+    function validaEmailLibre(){
+      const v = (email.value || '').trim();
+      email.setCustomValidity('');
+      if (v && !email.checkValidity()){
+        email.setCustomValidity('Ingresa un correo válido (ej. nombre@dominio.com)');
+      }
     }
+
+    // Dirección: mantenemos “Calle Número Colonia”
     function validaDireccion(){
-      if(!dir.checkValidity()) dir.setCustomValidity('Formato: Calle Número Colonia (en ese orden)');
-      else dir.setCustomValidity('');
+      if(!dir.checkValidity())
+        dir.setCustomValidity('Formato: Calle Número Colonia (en ese orden)');
+      else
+        dir.setCustomValidity('');
     }
-    email.addEventListener('input', validaGmail);
+
+    email.addEventListener('input', validaEmailLibre);
     dir.addEventListener('input', validaDireccion);
   })();
 </script>
@@ -394,6 +431,8 @@
   function setLocked(lock){
     lockables.forEach(el => el.disabled = lock);
     submitBtn.disabled = lock || !allFilesOk();
+    // informar a otros scripts del cambio de estado
+    document.dispatchEvent(new CustomEvent(lock ? 'folio:lock' : 'folio:unlock'));
   }
   setLocked(true);
 
@@ -425,19 +464,39 @@
     }
   });
 
-  // UX archivos
+  // UX archivos (múltiples inputs por tarjeta)
   const inputs = Array.from(document.querySelectorAll('.doc-card input[type="file"]'));
-  function shortName(name){ if(!name) return "Sin archivo"; return name.length>38?name.slice(0,18)+'…'+name.slice(-16):name; }
-  function updateCard(input){
-    const card = input.closest('.doc-card'); const ok = input.files && input.files.length>0;
-    card.classList.toggle('ok', ok);
-    const fn = card.querySelector('.doc-file'); if(fn) fn.textContent = ok?shortName(input.files[0].name):'Sin archivo';
-    const st = card.querySelector('.doc-text'); if(st) st.textContent = ok?'Listo':'Pendiente';
-    // correcto
-    submitBtn.disabled = !allFilesOk();
 
+  function shortName(name){ if(!name) return "Sin archivo"; return name.length>38?name.slice(0,18)+'…'+name.slice(-16):name; }
+
+  function updateCardStatus(card){
+    const reqs = Array.from(card.querySelectorAll('input[type="file"][required]'));
+    const allOk = reqs.every(i => i.files && i.files.length>0);
+    const st = card.querySelector('.doc-text');
+    if(st) st.textContent = allOk ? 'Listo' : 'Pendiente';
+    card.classList.toggle('ok', allOk);
   }
-  inputs.forEach(i=>{ i.addEventListener('change', ()=>updateCard(i)); updateCard(i); });
+
+  function updateFileLabel(input){
+    const label = document.querySelector(`.doc-file[data-for="${input.id}"]`);
+    if(label){
+      const ok = input.files && input.files[0];
+      label.textContent = ok ? shortName(input.files[0].name) : 'Sin archivo';
+    }
+  }
+
+  inputs.forEach(i=>{
+    i.addEventListener('change', ()=>{
+      updateFileLabel(i);
+      updateCardStatus(i.closest('.doc-card'));
+      submitBtn.disabled = !allFilesOk();
+    });
+    // estado inicial
+    updateFileLabel(i);
+  });
+
+  // estado inicial de todas las tarjetas
+  document.querySelectorAll('.doc-card').forEach(updateCardStatus);
 })();
 </script>
 
@@ -449,44 +508,63 @@
 })();
 </script>
 
+<!-- Persona física/moral: por defecto MORAL (requerido), si marcas PF se desactiva -->
 <script>
 (function(){
-  const chk = document.getElementById('pfisica');
-  const file = document.getElementById('contrato_poder');
+  const chk = document.getElementById('pfisica');           // casilla "persona física"
+  const file = document.getElementById('contrato_poder');   // input del archivo
   if(!chk || !file) return;
 
   function lockedByFolio(){
-    // If ANY folio-locked is disabled, consider form locked
+    // Si hay al menos un .folio-locked deshabilitado, aún está bloqueado
     return document.querySelector('.folio-locked:disabled') !== null;
   }
 
   function apply(){
-    if(chk.checked){
-      // Persona física: este documento no aplica.
+    if(!chk.checked){
+      // Persona MORAL (por defecto): requerido; activo solo cuando el folio esté desbloqueado
+      file.setAttribute('required','');
+      file.disabled = lockedByFolio();
+    }else{
+      // Persona FÍSICA: no requerido y deshabilitado
       file.value = '';
       file.disabled = true;
       file.removeAttribute('required');
-    }else{
-      // Persona moral: requerido; respeta el bloqueo por folio
-      file.setAttribute('required','');
-      file.disabled = lockedByFolio();
     }
     try { file.dispatchEvent(new Event('change', {bubbles:true})); } catch(e){}
   }
 
-  // Al cambiar la casilla, aplicar
+  // Cambios de la casilla
   chk.addEventListener('change', apply);
+  // Reaccionar a bloqueo/desbloqueo del folio
+  document.addEventListener('folio:unlock', apply);
+  document.addEventListener('folio:lock', apply);
 
-  // Reaplicar cuando se intente verificar folio (tras desbloqueo)
-  const btnVer = document.getElementById('btn-verificar');
-  if (btnVer) btnVer.addEventListener('click', ()=>setTimeout(apply, 500));
-
-  // Inicial
+  // Estado inicial
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', apply);
   } else {
     apply();
   }
+})();
+</script>
+
+<!-- ÚNICO script para el menú móvil -->
+<script>
+(function(){
+  const menu = document.getElementById('navInq');
+  const nav  = document.querySelector('nav.navbar');
+  if(!menu || !nav) return;
+
+  window.toggleNavInq = function(){
+    menu.classList.toggle('show');
+  };
+
+  // Cierra al tocar fuera o al pasar a escritorio
+  document.addEventListener('click', (e)=>{
+    if(!nav.contains(e.target)) menu.classList.remove('show');
+  }, {passive:true});
+  window.addEventListener('resize', ()=>{ if(window.innerWidth >= 992) menu.classList.remove('show'); }, {passive:true});
 })();
 </script>
 
