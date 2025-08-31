@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Subir documentos – Inquilino</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}?v=10">
+  <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}?v=11">
   <style>
     .card.full{width:100%;max-width:100%}
     .page-docs .form-label{display:block;margin-bottom:.35rem}
@@ -247,11 +247,13 @@
         <div class="row g-3">
           <div class="col-12">
             <label class="form-label">Dirección completa (del inmueble)</label>
+            <!-- LIBRE: sin pattern, solo required -->
             <input type="text" name="direccion" class="form-control folio-locked"
-                   placeholder="Calle Número Colonia"
-                   required disabled
-                   pattern="^\s*\S+(?:\s+\S+)*\s+\d+[\w/-]*\s+\S+(?:\s+\S+)*\s*$">
-            <div class="form-text">Orden: <strong>Calle Número Colonia</strong>. Ej.: <code>Insurgentes Sur 716 Del Valle</code>.</div>
+                   placeholder="Escribe la dirección completa"
+                   required disabled>
+            <div class="form-text">
+              Ejemplo: <code>Av. Paseo de la Reforma 350, Torre A, Piso 12, Col. Juárez, Alcaldía Cuauhtémoc, C.P. 06600, Ciudad de México</code>
+            </div>
           </div>
           <div class="col-md-4">
             <label class="form-label">Tipo de inmueble</label>
@@ -384,14 +386,14 @@
   </form>
 </div>
 
-<!-- VALIDACIONES ESPECÍFICAS (correo libre + dirección con orden) -->
+<!-- VALIDACIONES ESPECÍFICAS (correo libre; dirección libre) -->
 <script>
   (function(){
     const form = document.getElementById('form-inquilino');
     const email = form.querySelector('input[name="correo"]');
     const dir   = form.querySelector('input[name="direccion"]');
 
-    // Correo: aceptamos cualquier dominio; usamos la val. nativa de type="email"
+    // Correo: aceptamos cualquier dominio; usamos la validación nativa de type="email"
     function validaEmailLibre(){
       const v = (email.value || '').trim();
       email.setCustomValidity('');
@@ -400,16 +402,13 @@
       }
     }
 
-    // Dirección: mantenemos “Calle Número Colonia”
-    function validaDireccion(){
-      if(!dir.checkValidity())
-        dir.setCustomValidity('Formato: Calle Número Colonia (en ese orden)');
-      else
-        dir.setCustomValidity('');
+    // Dirección libre: solo que no esté vacía (handled by required)
+    function validaDireccionLibre(){
+      dir.setCustomValidity('');
     }
 
     email.addEventListener('input', validaEmailLibre);
-    dir.addEventListener('input', validaDireccion);
+    dir.addEventListener('input', validaDireccionLibre);
   })();
 </script>
 
@@ -431,7 +430,6 @@
   function setLocked(lock){
     lockables.forEach(el => el.disabled = lock);
     submitBtn.disabled = lock || !allFilesOk();
-    // informar a otros scripts del cambio de estado
     document.dispatchEvent(new CustomEvent(lock ? 'folio:lock' : 'folio:unlock'));
   }
   setLocked(true);
@@ -491,42 +489,29 @@
       updateCardStatus(i.closest('.doc-card'));
       submitBtn.disabled = !allFilesOk();
     });
-    // estado inicial
     updateFileLabel(i);
   });
 
-  // estado inicial de todas las tarjetas
   document.querySelectorAll('.doc-card').forEach(updateCardStatus);
 })();
 </script>
 
+<!-- Persona física/moral -->
 <script>
 (function(){
-  const header=document.querySelector('.barra-superior'); if(!header) return;
-  const set=()=>document.documentElement.style.setProperty('--header-h',header.offsetHeight+'px');
-  set(); window.addEventListener('resize',set);
-})();
-</script>
-
-<!-- Persona física/moral: por defecto MORAL (requerido), si marcas PF se desactiva -->
-<script>
-(function(){
-  const chk = document.getElementById('pfisica');           // casilla "persona física"
-  const file = document.getElementById('contrato_poder');   // input del archivo
+  const chk = document.getElementById('pfisica');
+  const file = document.getElementById('contrato_poder');
   if(!chk || !file) return;
 
   function lockedByFolio(){
-    // Si hay al menos un .folio-locked deshabilitado, aún está bloqueado
     return document.querySelector('.folio-locked:disabled') !== null;
   }
 
   function apply(){
     if(!chk.checked){
-      // Persona MORAL (por defecto): requerido; activo solo cuando el folio esté desbloqueado
       file.setAttribute('required','');
       file.disabled = lockedByFolio();
     }else{
-      // Persona FÍSICA: no requerido y deshabilitado
       file.value = '';
       file.disabled = true;
       file.removeAttribute('required');
@@ -534,13 +519,10 @@
     try { file.dispatchEvent(new Event('change', {bubbles:true})); } catch(e){}
   }
 
-  // Cambios de la casilla
   chk.addEventListener('change', apply);
-  // Reaccionar a bloqueo/desbloqueo del folio
   document.addEventListener('folio:unlock', apply);
   document.addEventListener('folio:lock', apply);
 
-  // Estado inicial
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', apply);
   } else {
@@ -549,7 +531,7 @@
 })();
 </script>
 
-<!-- ÚNICO script para el menú móvil -->
+<!-- Menú móvil -->
 <script>
 (function(){
   const menu = document.getElementById('navInq');
@@ -560,7 +542,6 @@
     menu.classList.toggle('show');
   };
 
-  // Cierra al tocar fuera o al pasar a escritorio
   document.addEventListener('click', (e)=>{
     if(!nav.contains(e.target)) menu.classList.remove('show');
   }, {passive:true});
