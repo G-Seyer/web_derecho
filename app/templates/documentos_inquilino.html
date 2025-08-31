@@ -247,8 +247,8 @@
         <div class="row g-3">
           <div class="col-12">
             <label class="form-label">Dirección completa (del inmueble)</label>
-            <!-- LIBRE: sin pattern, solo required -->
-            <input type="text" name="direccion" class="form-control folio-locked"
+            <!-- Cambiado a nombre de columna real -->
+            <input type="text" name="inmueble_direccion" class="form-control folio-locked"
                   placeholder="Escribe la dirección completa"
                   required disabled>
             <div class="form-text">
@@ -257,19 +257,19 @@
           </div>
           <div class="col-md-4">
             <label class="form-label">Tipo de inmueble</label>
-            <input type="text" name="tipo_inmueble" class="form-control folio-locked" placeholder="Casa, depto, local..." disabled>
+            <input type="text" name="inmueble_tipo" class="form-control folio-locked" placeholder="Casa, depto, local..." disabled>
           </div>
           <div class="col-md-4">
             <label class="form-label">Precio de renta</label>
-            <input type="number" step="0.01" name="precio_renta" class="form-control folio-locked" placeholder="0.00" disabled>
+            <input type="number" step="0.01" name="inmueble_precio_renta" class="form-control folio-locked" placeholder="0.00" disabled>
           </div>
           <div class="col-md-4">
             <label class="form-label">Fecha de inicio de la renta</label>
-            <input type="date" name="fecha_inicio_renta" class="form-control folio-locked" disabled>
+            <input type="date" name="inmueble_fecha_inicio" class="form-control folio-locked" disabled>
           </div>
           <div class="col-md-4">
             <label class="form-label">Fecha de firma del contrato</label>
-            <input type="date" name="fecha_firma_contrato" class="form-control folio-locked" disabled>
+            <input type="date" name="inmueble_fecha_contrato" class="form-control folio-locked" disabled>
           </div>
         </div>
       </div>
@@ -391,7 +391,7 @@
   (function(){
     const form = document.getElementById('form-inquilino');
     const email = form.querySelector('input[name="correo"]');
-    const dir   = form.querySelector('input[name="direccion"]');
+    const dir   = form.querySelector('input[name="inmueble_direccion"]'); // <- actualizado
 
     // Correo: aceptamos cualquier dominio; usa la validación nativa de type="email"
     function validaEmailLibre(){
