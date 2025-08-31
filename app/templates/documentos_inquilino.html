@@ -249,8 +249,8 @@
             <label class="form-label">Dirección completa (del inmueble)</label>
             <!-- LIBRE: sin pattern, solo required -->
             <input type="text" name="direccion" class="form-control folio-locked"
-                   placeholder="Escribe la dirección completa"
-                   required disabled>
+                  placeholder="Escribe la dirección completa"
+                  required disabled>
             <div class="form-text">
               Ejemplo: <code>Av. Paseo de la Reforma 350, Torre A, Piso 12, Col. Juárez, Alcaldía Cuauhtémoc, C.P. 06600, Ciudad de México</code>
             </div>
@@ -393,7 +393,7 @@
     const email = form.querySelector('input[name="correo"]');
     const dir   = form.querySelector('input[name="direccion"]');
 
-    // Correo: aceptamos cualquier dominio; usamos la validación nativa de type="email"
+    // Correo: aceptamos cualquier dominio; usa la validación nativa de type="email"
     function validaEmailLibre(){
       const v = (email.value || '').trim();
       email.setCustomValidity('');
@@ -402,7 +402,7 @@
       }
     }
 
-    // Dirección libre: solo que no esté vacía (handled by required)
+    // Dirección: libre; sólo exigimos que no esté vacía (handled by required)
     function validaDireccionLibre(){
       dir.setCustomValidity('');
     }
