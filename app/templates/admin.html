@@ -579,7 +579,15 @@ frmFiltro.addEventListener('submit', async (e)=>{
   }
 
   el.btnAsignar?.addEventListener('click', async ()=>{
-    const folio = (el.folioAsignar.value||'').trim();
+    const folio = (el.folioAsignar.value||'')
+      .toUpperCase()
+      .replace(/\s+/g,'')
+      .trim();
+
+    if (!/^AEPRA-\d{6}-[A-Z0-9]{4}$/.test(folio)) {
+      alert('Folio inválido. Usa AEPRA-YYYYMM-XXXX');
+      return;
+    }
     const asesor_id = el.asesorSelect.value;
     const dest = el.destinatarioSelect.value; // "asesor:12" o "referenciado:34"
     if(!folio || !asesor_id || !dest) return alert('Completa los datos para asignar.');
