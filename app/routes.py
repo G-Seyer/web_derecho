@@ -7,13 +7,14 @@ from functools import wraps
 
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
-    flash, jsonify, current_app as app, Response
+    flash, jsonify, current_app as app, Response, session
 )
 from flask_login import (
     login_user, logout_user, login_required, UserMixin, current_user
 )
 from sqlalchemy import text
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix  # << nuevo
 
 from app import db, login_manager
 from app.models import MensajeContacto
@@ -24,6 +25,22 @@ from app.models import MensajeContacto
 bp = Blueprint("routes", __name__)
 FORCE_S3 = os.getenv("FORCE_S3", "0") == "1"
 ALLOWED_EXTS = {"pdf", "png", "jpg", "jpeg", "webp", "heic", "heif"}
+
+@bp.record_once
+def _apply_proxy_and_cookies(state):
+    """Asegura que detrás de Render/Reverse proxy se respeten los headers
+    y que los cookies funcionen en https de producción sin afectar local."""
+    app = state.app
+    try:
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)  # << confía en el proxy
+    except Exception:
+        pass
+    # Endurecer cookies solo en producción
+    if os.getenv("RENDER", "false").lower() in {"1", "true"} or os.getenv("FORCE_HTTPS", "1") == "1":
+        app.config.setdefault("PREFERRED_URL_SCHEME", "https")
+        app.config.setdefault("SESSION_COOKIE_SECURE", True)
+        app.config.setdefault("REMEMBER_COOKIE_SECURE", True)
+        app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
 
 def _ext_ok(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[-1].lower() in ALLOWED_EXTS
@@ -65,7 +82,6 @@ def _save_file_to_s3(*, file_storage, folder: str, public: bool = True):
     mime = mimetypes.guess_type(filename)[0] or file_storage.mimetype or "application/octet-stream"
     key  = f"{folder.strip('/')}/{datetime.now().strftime('%Y%m%dT%H%M%S')}_{filename}"
 
-    # ACL pública solo si config lo permite Y el caller lo pide
     want_public = (os.getenv("S3_PUBLIC_READ", "0") == "1") and public
     put_kwargs = {"Bucket": bucket, "Key": key, "Body": raw, "ContentType": mime}
     if want_public:
@@ -75,7 +91,6 @@ def _save_file_to_s3(*, file_storage, folder: str, public: bool = True):
         s3.put_object(**put_kwargs)
     except Exception as e:
         try:
-            # Reintenta sin ACL si el bucket no permite public-read
             if "AccessDenied" in str(e) or "InvalidArgument" in str(e):
                 s3.put_object(Bucket=bucket, Key=key, Body=raw, ContentType=mime)
             else:
@@ -106,11 +121,7 @@ def _save_file_to_local(*, file_storage, folder: str):
     return ruta, mime, size
 
 def _save_file(*, file_storage, folder: str, public: bool = True):
-    """
-    Intenta S3 si hay configuración; si falla:
-      - si FORCE_S3=1 -> lanza error,
-      - si FORCE_S3=0 -> cae a almacenamiento local.
-    """
+    """Intenta S3; si falla y FORCE_S3=1, lanza error. Si FORCE_S3=0, cae a disco."""
     try:
         if (os.getenv("S3_BUCKET") or os.getenv("S3_BUCKET_NAME")):
             return _save_file_to_s3(file_storage=file_storage, folder=folder, public=public)
@@ -203,10 +214,7 @@ def _upload_attachments_to_s3(bucket: str, prefix_key: str, files_meta: list[dic
     return uploaded
 
 def save_submission_bundle(form_slug: str, title: str, folio: str | None = None, email: str | None = None, upload_attachments: bool = True):
-    """
-    Genera un TXT con todo el envío y lo sube a S3.
-    Si upload_attachments=True, también sube adjuntos bajo el mismo prefijo.
-    """
+    """Genera un TXT con todo el envío y lo sube a S3. Adjuntos opcionales."""
     bucket = _current_bucket()
     want_public = (os.getenv("DOC_DEFAULT_PUBLIC", "false").lower() == "true")
 
@@ -216,7 +224,6 @@ def save_submission_bundle(form_slug: str, title: str, folio: str | None = None,
 
     _upload_bytes_to_s3(bucket=bucket, key=key_txt, raw=txt, mime="text/plain", want_public=want_public)
     uploaded_files = _upload_attachments_to_s3(bucket=bucket, prefix_key=key_txt, files_meta=files_meta) if upload_attachments else []
-
     return {"doc_key": key_txt, "uploaded_files": uploaded_files, "data": data}
 
 # =====================================================
@@ -237,10 +244,6 @@ def home():
 # ===============  HELPERS BASE DE DATOS  =============
 # =====================================================
 def _insert_document_with_folio(*, folio, tipo_usuario, usuario_id, tipo_documento, ruta, nombre_archivo, mime, size):
-    """
-    Inserta/actualiza un documento en public.documentos.
-    La llave de conflicto usa (tipo_usuario, usuario_id, tipo_documento).
-    """
     sql = text("""
         INSERT INTO public.documentos
           (folio, tipo_usuario, usuario_id, tipo_documento, ruta, nombre_archivo, mime, tamano_bytes, fecha_subida)
@@ -261,10 +264,6 @@ def _insert_document_with_folio(*, folio, tipo_usuario, usuario_id, tipo_documen
     ))
 
 def _get_or_create_usuario_id_por_folio(*, tabla: str, folio: str):
-    """
-    Crea un registro con folio (si no existe) y devuelve el id.
-    'tabla' debe ser un nombre controlado: 'arrendadores' o 'arrendatarios'.
-    """
     sql = text(f"""
         INSERT INTO public.{tabla} (folio)
         VALUES (:folio)
@@ -275,11 +274,6 @@ def _get_or_create_usuario_id_por_folio(*, tabla: str, folio: str):
     return row[0]
 
 def _upsert_arrendador_datos(datos: dict):
-    """
-    Inserta/actualiza datos del arrendador.
-    Requiere que public.arrendadores tenga UNIQUE(folio).
-    Ajusta a tu esquema si algún campo no existe.
-    """
     sql = text("""
         INSERT INTO public.arrendadores(
             folio, nombre, correo, direccion_actual, rfc, curp, telefono,
@@ -328,10 +322,6 @@ def _upsert_arrendador_datos(datos: dict):
     db.session.execute(sql, datos)
 
 def _upsert_arrendatario_datos(datos: dict):
-    """
-    Inserta/actualiza datos mínimos del arrendatario.
-    Requiere que public.arrendatarios tenga UNIQUE(folio).
-    """
     sql = text("""
         INSERT INTO public.arrendatarios(
             folio, lugar_nacimiento, fecha_nacimiento, updated_at
@@ -386,7 +376,7 @@ def api_verificar_folio(folio):
     ok = _folio_activo((folio or "").upper())
     return jsonify({"ok": ok})
 
-@bp.get("/validar_folio")  # compat para plantillas viejas
+@bp.get("/validar_folio")
 def validar_folio():
     folio = (request.args.get("folio") or "").strip().upper()
     return jsonify({"valido": _folio_activo(folio)})
@@ -403,118 +393,68 @@ def api_admin_folio_nuevo():
 def subir_propietario():
     if request.method == "GET":
         return render_template("documentos_propietario.html")
-
     form = request.form
     folio = (form.get("folio") or "").strip().upper()
-
-    # Validación de folio
     if not re.match(r"^AEPRA-\d{6}-[A-Z0-9]{4}$", folio):
         return _to_home("Folio inválido. Verifica el formato AEPRA-YYYYMM-XXXX.", "danger")
     if not _folio_activo(folio):
         return _to_home("El folio no existe o está desactivado. Solicítalo a administración.", "danger")
-
-    # Datos
     datos = {
-        "folio": folio,
-        "nombre": form.get("nombre"),
-        "correo": form.get("correo"),
-        "direccion_actual": form.get("direccion_actual"),
-        "rfc": form.get("rfc"),
-        "curp": form.get("curp"),
-        "telefono": form.get("telefono"),
-        "banco": form.get("banco"),
-        "titular_cuenta": form.get("titular_cuenta"),
-        "cuenta_bancaria": form.get("cuenta_bancaria"),
-        "clabe_interbancaria": form.get("clabe_interbancaria"),
-        "direccion": form.get("direccion"),
-        "tipo_inmueble": form.get("tipo_inmueble"),
-        "superficie_terreno": form.get("superficie_terreno"),
-        "metros_construidos": form.get("metros_construidos"),
-        "habitaciones": form.get("habitaciones"),
-        "banos": form.get("banos"),
-        "estacionamientos": form.get("estacionamientos"),
-        "uso_suelo": form.get("uso_suelo"),
-        "cuenta_predial": form.get("cuenta_predial"),
-        "cuenta_agua": form.get("cuenta_agua"),
-        "servicios_pagan": form.get("servicios_pagan"),
-        "caracteristicas": form.get("caracteristicas"),
-        "inventario": form.get("inventario"),
-        "precio_renta": form.get("precio_renta"),
-        "fecha_inicio_renta": form.get("fecha_inicio_renta"),
+        "folio": folio, "nombre": form.get("nombre"), "correo": form.get("correo"),
+        "direccion_actual": form.get("direccion_actual"), "rfc": form.get("rfc"),
+        "curp": form.get("curp"), "telefono": form.get("telefono"), "banco": form.get("banco"),
+        "titular_cuenta": form.get("titular_cuenta"), "cuenta_bancaria": form.get("cuenta_bancaria"),
+        "clabe_interbancaria": form.get("clabe_interbancaria"), "direccion": form.get("direccion"),
+        "tipo_inmueble": form.get("tipo_inmueble"), "superficie_terreno": form.get("superficie_terreno"),
+        "metros_construidos": form.get("metros_construidos"), "habitaciones": form.get("habitaciones"),
+        "banos": form.get("banos"), "estacionamientos": form.get("estacionamientos"),
+        "uso_suelo": form.get("uso_suelo"), "cuenta_predial": form.get("cuenta_predial"),
+        "cuenta_agua": form.get("cuenta_agua"), "servicios_pagan": form.get("servicios_pagan"),
+        "caracteristicas": form.get("caracteristicas"), "inventario": form.get("inventario"),
+        "precio_renta": form.get("precio_renta"), "fecha_inicio_renta": form.get("fecha_inicio_renta"),
         "fecha_firma_contrato": form.get("fecha_firma_contrato"),
     }
-    requeridos = [
-        "nombre","correo","direccion_actual","rfc","curp","telefono",
-        "banco","titular_cuenta","cuenta_bancaria","clabe_interbancaria",
-        "direccion","precio_renta","fecha_inicio_renta","fecha_firma_contrato"
-    ]
+    requeridos = ["nombre","correo","direccion_actual","rfc","curp","telefono",
+                  "banco","titular_cuenta","cuenta_bancaria","clabe_interbancaria",
+                  "direccion","precio_renta","fecha_inicio_renta","fecha_firma_contrato"]
     faltantes = [k for k in requeridos if not (datos.get(k) or "").strip()]
     if faltantes:
         return _to_home(f"Campos obligatorios faltantes: {', '.join(faltantes)}", "danger")
-
     try:
-        # 1) Datos del arrendador
         _upsert_arrendador_datos(datos)
         arr_id = _get_or_create_usuario_id_por_folio(tabla="arrendadores", folio=folio)
-
-        # 2) Archivos (flujo existente)
         alias = {
             "boleta_predial": ["boleta_predial", "solicitud_propietario", "solicitud"],
             "identificacion": ["identificacion", "id_oficial"],
             "comprobante_domicilio": ["comprobante_domicilio", "comp_domicilio"],
             "escritura": ["escritura"],
-            "contrato_poder": ["contrato_poder", "poder_notarial"],  # opcional
+            "contrato_poder": ["contrato_poder", "poder_notarial"],
             "folio_real": ["folio_real", "constancia_folio_real"],
         }
         requeridos_doc = {"boleta_predial", "identificacion", "comprobante_domicilio", "escritura", "folio_real"}
         guardados = []
-
         for logical, keys in alias.items():
-            fs = next(
-                (request.files[k] for k in keys if k in request.files and request.files[k] and request.files[k].filename),
-                None
-            )
+            fs = next((request.files[k] for k in keys if k in request.files and request.files[k] and request.files[k].filename), None)
             if not fs:
                 if logical in requeridos_doc:
                     raise ValueError(f"Falta archivo requerido: {logical.replace('_',' ')}")
                 continue
             if not _ext_ok(fs.filename):
                 raise ValueError(f"Extensión no permitida: {fs.filename}")
-
-            ruta, mime, size = _save_file(
-                file_storage=fs,
-                folder=f"arrendador/{folio}/{arr_id}",
-                public=True
-            )
+            ruta, mime, size = _save_file(file_storage=fs, folder=f"arrendador/{folio}/{arr_id}", public=True)
             _insert_document_with_folio(
                 folio=folio, tipo_usuario="arrendador", usuario_id=arr_id,
                 tipo_documento=logical, ruta=ruta, nombre_archivo=fs.filename, mime=mime, size=size
             )
             guardados.append(logical)
-
-        # 3) Marcar uso y commit
         _marcar_uso_folio(folio, "arrendador")
         db.session.commit()
-
-        # 4) Generar documento TXT con TODO el envío (sin re-subir adjuntos)
         try:
-            save_submission_bundle(
-                form_slug="propietario",
-                title="Formulario de Propietario",
-                folio=folio,
-                email=datos.get("correo"),
-                upload_attachments=False
-            )
+            save_submission_bundle("propietario","Formulario de Propietario", folio=folio, email=datos.get("correo"), upload_attachments=False)
         except Exception as e:
             app.logger.warning("Bundle TXT propietario no subido: %s", e)
-
-        # 5) Mensaje + redirección
         lista = ", ".join(guardados) if guardados else "ninguno"
-        return _to_home(
-            f"✅ Propietario guardado para <b>{folio}</b>. Documentos almacenados: <b>{len(guardados)}</b> ({lista}).",
-            "success"
-        )
-
+        return _to_home(f"✅ Propietario guardado para <b>{folio}</b>. Documentos almacenados: <b>{len(guardados)}</b> ({lista}).","success")
     except Exception as e:
         db.session.rollback()
         app.logger.exception("Error guardando propietario")
@@ -524,18 +464,13 @@ def subir_propietario():
 def subir_inquilino():
     if request.method == "GET":
         return render_template("documentos_inquilino.html")
-
     form = request.form
     folio = (form.get("folio") or "").strip().upper()
-
-    # Validación de folio
     if not re.match(r"^AEPRA-\d{6}-[A-Z0-9]{4}$", folio):
         return _to_home("Folio inválido. Verifica el formato AEPRA-YYYYMM-XXXX.", "danger")
     if not _folio_activo(folio):
         return _to_home("El folio no existe o está desactivado. Solicítalo a administración.", "danger")
-
     try:
-        # 1) Asegura registro y obtiene id del inquilino
         inq_id = _get_or_create_usuario_id_por_folio(tabla="arrendatarios", folio=folio)
         datos_inq = {
             "folio": folio,
@@ -543,50 +478,25 @@ def subir_inquilino():
             "fecha_nacimiento": (form.get("fecha_nacimiento") or None)
         }
         _upsert_arrendatario_datos(datos_inq)
-
-        # 2) Guardar archivos (flujo existente)
         guardados = []
         for clave, fs in request.files.items():
-            if not fs or fs.filename == "":
-                continue
-            if not _ext_ok(fs.filename):
-                raise ValueError(f"Extensión no permitida: {fs.filename}")
-
-            ruta, mime, size = _save_file(
-                file_storage=fs,
-                folder=f"arrendatario/{folio}/{inq_id}",
-                public=True
-            )
+            if not fs or fs.filename == "": continue
+            if not _ext_ok(fs.filename): raise ValueError(f"Extensión no permitida: {fs.filename}")
+            ruta, mime, size = _save_file(file_storage=fs, folder=f"arrendatario/{folio}/{inq_id}", public=True)
             _insert_document_with_folio(
                 folio=folio, tipo_usuario="arrendatario", usuario_id=inq_id,
                 tipo_documento=clave, ruta=ruta, nombre_archivo=fs.filename, mime=mime, size=size
             )
             guardados.append(clave)
-
-        # 3) Marcar uso y commit
         _marcar_uso_folio(folio, "arrendatario")
         db.session.commit()
-
-        # 4) Generar documento TXT con TODO el envío (sin re-subir adjuntos)
         try:
             correo = (form.get("correo") or None)
-            save_submission_bundle(
-                form_slug="inquilino",
-                title="Formulario de Inquilino",
-                folio=folio,
-                email=correo,
-                upload_attachments=False
-            )
+            save_submission_bundle("inquilino","Formulario de Inquilino", folio=folio, email=correo, upload_attachments=False)
         except Exception as e:
             app.logger.warning("Bundle TXT inquilino no subido: %s", e)
-
-        # 5) Mensaje + redirección
         lista = ", ".join(guardados) if guardados else "ninguno"
-        return _to_home(
-            f"✅ Inquilino guardado para <b>{folio}</b>. Documentos almacenados: <b>{len(guardados)}</b> ({lista}).",
-            "success"
-        )
-
+        return _to_home(f"✅ Inquilino guardado para <b>{folio}</b>. Documentos almacenados: <b>{len(guardados)}</b> ({lista}).","success")
     except Exception as e:
         db.session.rollback()
         app.logger.exception("Error guardando inquilino")
@@ -597,24 +507,18 @@ def subir_inquilino():
 # =====================================================
 ADMIN_USER = (os.getenv("ADMIN_USER") or "").strip()
 ADMIN_PASS = (os.getenv("ADMIN_PASS") or "").strip()
-
 USE_FALLBACK = False
 if not ADMIN_USER or not ADMIN_PASS:
-    ADMIN_USER = "admin"
-    ADMIN_PASS = "admin123"
-    USE_FALLBACK = True
+    ADMIN_USER = "admin"; ADMIN_PASS = "admin123"; USE_FALLBACK = True
 
 import logging
 _auth_logger = logging.getLogger("auth")
-_auth_logger.warning(
-    "ADMIN CREDS -> user_set=%s pass_len=%d%s",
-    bool(ADMIN_USER), len(ADMIN_PASS or ""),
-    " [FALLBACK DEV ENABLED]" if USE_FALLBACK else ""
-)
+_auth_logger.warning("LOGIN TRY in routes: config -> user_set=%s pass_len=%d%s",
+                     bool(ADMIN_USER), len(ADMIN_PASS or ""),
+                     " [FALLBACK DEV ENABLED]" if USE_FALLBACK else "")
 
 class AdminUser(UserMixin):
-    def __init__(self, user_id="admin"):
-        self.id = user_id
+    def __init__(self, user_id="admin"): self.id = user_id
 
 @login_manager.user_loader
 def load_user(user_id: str):
@@ -628,19 +532,18 @@ def login():
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
         password = (request.form.get("password") or "").strip()
-
         try:
-            app.logger.warning(
-                "LOGIN TRY -> user=%r match_user=%s match_pass=%s",
-                username, (username == ADMIN_USER), (password == ADMIN_PASS)
-            )
+            app.logger.warning("LOGIN TRY -> user=%r match_user=%s match_pass=%s",
+                               username, (username == ADMIN_USER), (password == ADMIN_PASS))
         except Exception:
             pass
 
         if username == ADMIN_USER and password == ADMIN_PASS:
             login_user(AdminUser("admin"))
             flash("Bienvenido, acceso concedido.", "success")
-            return redirect(url_for("routes.admin"))
+            # respeta el parámetro next si viene de /login?next=/admin
+            dest = request.args.get("next") or url_for("routes.admin")
+            return redirect(dest)
         else:
             flash("Usuario o contraseña incorrectos.", "warning")
 
@@ -664,7 +567,6 @@ def admin():
 @bp.get("/api/admin/folio/<folio>")
 def api_admin_folio(folio):
     conn = db.session.connection()
-
     cur  = conn.execute(text("""
         SELECT folio, docs_arrendador, docs_arrendatario, total_docs,
                primera_subida, ultima_subida
@@ -682,7 +584,6 @@ def api_admin_folio(folio):
             "primera_subida": row[4].isoformat() if row[4] else None,
             "ultima_subida":  row[5].isoformat() if row[5] else None,
         }
-
     cur = conn.execute(text("""
         SELECT tipo_usuario, tipo_documento, nombre_archivo,
                COALESCE(mime, content_type) AS mime,
@@ -694,15 +595,10 @@ def api_admin_folio(folio):
     documentos = []
     for r in cur.fetchall():
         documentos.append({
-            "tipo_usuario": r[0],
-            "tipo_documento": r[1],
-            "nombre_archivo": r[2],
-            "mime": r[3],
-            "tamano_bytes": int(r[4]) if r[4] is not None else None,
-            "ruta": r[5],
-            "fecha_subida": r[6].isoformat() if r[6] else None,
+            "tipo_usuario": r[0], "tipo_documento": r[1], "nombre_archivo": r[2],
+            "mime": r[3], "tamano_bytes": int(r[4]) if r[4] is not None else None,
+            "ruta": r[5], "fecha_subida": r[6].isoformat() if r[6] else None,
         })
-
     cur = conn.execute(text("""
         SELECT fecha_inicio, fecha_fin
         FROM public.polizas
@@ -712,7 +608,6 @@ def api_admin_folio(folio):
     row = cur.fetchone()
     if row:
         poliza = {"fecha_inicio": row[0].isoformat(), "fecha_fin": row[1].isoformat()}
-
     return jsonify({"resumen": resumen, "documentos": documentos, "poliza": poliza})
 
 @bp.post("/api/admin/poliza")
@@ -722,14 +617,11 @@ def api_admin_set_poliza():
     finicio = (data.get("fecha_inicio") or "").strip()
     if not folio or not finicio:
         return jsonify({"ok": False, "error": "Folio y fecha_inicio son requeridos"}), 400
-
     try:
         y, m, d = map(int, finicio.split("-"))
-        fi = date(y, m, d)
-        ff = date(y + 1, m, d)
+        fi = date(y, m, d); ff = date(y + 1, m, d)
     except Exception:
         return jsonify({"ok": False, "error": "fecha_inicio inválida (YYYY-MM-DD)"}), 400
-
     db.session.execute(text("""
         INSERT INTO public.polizas (folio, fecha_inicio, fecha_fin)
         VALUES (:folio, :fi, :ff)
@@ -738,38 +630,26 @@ def api_admin_set_poliza():
             fecha_fin    = EXCLUDED.fecha_fin
     """), {"folio": folio, "fi": fi, "ff": ff})
     db.session.commit()
-
     return jsonify({"ok": True, "folio": folio, "fecha_inicio": fi.isoformat(), "fecha_fin": ff.isoformat()})
 
 @bp.get("/api/admin/polizas")
 def api_admin_polizas():
-    """
-    Devuelve pólizas que vencen en <= max_meses meses a partir de hoy.
-    ?max_meses=3  (default 3)
-    ?incluir_vencidas=0|1  (default 0)
-    """
     try:
         max_meses = int(request.args.get("max_meses", 3))
     except ValueError:
         max_meses = 3
     incluir_vencidas = request.args.get("incluir_vencidas", "0") == "1"
-
     sql = text("""
         with pol as (
-          select
-            folio,
-            fecha_inicio,
-            fecha_fin,
-            (extract(year  from age(fecha_fin, current_date))::int * 12)
-          + (extract(month from age(fecha_fin, current_date))::int)          as meses_restantes,
-            (fecha_fin - current_date)                                        as dias_restantes
+          select folio, fecha_inicio, fecha_fin,
+            (extract(year from age(fecha_fin, current_date))::int * 12)
+          + (extract(month from age(fecha_fin, current_date))::int) as meses_restantes,
+            (fecha_fin - current_date) as dias_restantes
           from polizas
         )
-        select folio,
-               to_char(fecha_inicio, 'YYYY-MM-DD') as fecha_inicio,
-               to_char(fecha_fin,    'YYYY-MM-DD') as fecha_fin,
-               meses_restantes,
-               dias_restantes
+        select folio, to_char(fecha_inicio,'YYYY-MM-DD') as fecha_inicio,
+               to_char(fecha_fin,'YYYY-MM-DD') as fecha_fin,
+               meses_restantes, dias_restantes
         from pol
         where meses_restantes <= :max_meses
           and (:incl = true or dias_restantes >= 0)
@@ -777,16 +657,8 @@ def api_admin_polizas():
         limit 500
     """)
     rows = db.session.execute(sql, {"max_meses": max_meses, "incl": incluir_vencidas}).mappings().all()
-
-    items = []
-    for r in rows:
-        items.append({
-            "folio": r["folio"],
-            "fecha_inicio": r["fecha_inicio"],
-            "fecha_fin": r["fecha_fin"],
-            "meses_restantes": int(r["meses_restantes"]),
-            "dias_restantes": int(r["dias_restantes"]),
-        })
+    items = [{"folio": r["folio"], "fecha_inicio": r["fecha_inicio"], "fecha_fin": r["fecha_fin"],
+              "meses_restantes": int(r["meses_restantes"]), "dias_restantes": int(r["dias_restantes"])} for r in rows]
     return jsonify({"items": items, "max_meses": max_meses, "incluir_vencidas": incluir_vencidas})
 
 # =====================================================
@@ -811,20 +683,17 @@ def privacidad_alias():
 def api_debug_consistencia(folio):
     f = (folio or "").strip().upper()
     out = {}
-
     r = db.session.execute(text("""
         SELECT folio, activo, usos_arrendador, usos_arrendatario, ultima_actividad_at
         FROM public.folios WHERE folio = :f
     """), {"f": f}).mappings().first()
     out["folios"] = dict(r) if r else None
-
     r = db.session.execute(text("""
         SELECT id, folio, nombre, correo, direccion_actual, created_at, updated_at
         FROM public.arrendadores WHERE folio = :f
         ORDER BY id DESC LIMIT 1
     """), {"f": f}).mappings().first()
     out["arrendadores"] = dict(r) if r else None
-
     docs = db.session.execute(text("""
         SELECT tipo_usuario, tipo_documento, nombre_archivo, ruta, fecha_subida
         FROM public.documentos WHERE folio = :f
@@ -832,7 +701,6 @@ def api_debug_consistencia(folio):
         LIMIT 50
     """), {"f": f}).mappings().all()
     out["documentos"] = [dict(x) for x in docs]
-
     return jsonify(out)
 
 @bp.get("/api/debug/s3")
@@ -843,17 +711,15 @@ def dbg_s3():
         s3.head_bucket(Bucket=bucket)
         return jsonify({"ok": True, "bucket": bucket, "checked_at": datetime.utcnow().isoformat()+"Z"}), 200
     except Exception as e:
-        return jsonify({
-            "ok": False,
-            "error": str(e),
-            "env": {
-                "AWS_ACCESS_KEY_ID": bool(os.getenv("AWS_ACCESS_KEY_ID")),
-                "AWS_SECRET_ACCESS_KEY": bool(os.getenv("AWS_SECRET_ACCESS_KEY")),
-                "AWS_DEFAULT_REGION": os.getenv("AWS_DEFAULT_REGION"),
-                "S3_BUCKET": os.getenv("S3_BUCKET"),
-                "S3_BUCKET_NAME": os.getenv("S3_BUCKET_NAME"),
-            }
-        }), 500
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@bp.get("/api/debug/whoami")  # << útil para verificar sesión en producción
+def debug_whoami():
+    return jsonify({
+        "authenticated": bool(getattr(current_user, "is_authenticated", False)),
+        "user_id": getattr(current_user, "id", None),
+        "session_keys": {k: session.get(k) for k in ["_user_id", "_fresh"]},
+    })
 
 # =====================================================
 # ====================  CONTACTO  =====================
@@ -867,47 +733,26 @@ def contacto():
         correo   = (request.form.get("correo") or "").strip()
         telefono = (request.form.get("telefono") or "").strip()
         mensaje  = (request.form.get("mensaje") or "").strip()
-
-        # Validación mínima
         if not nombre or not correo or not mensaje:
             flash("Nombre, correo y mensaje son obligatorios.", "warning")
             return render_template("contacto.html", form=request.form), 400
-
         if not EMAIL_RE.match(correo):
             flash("Correo no válido.", "warning")
             return render_template("contacto.html", form=request.form), 400
-
         try:
-            m = MensajeContacto(
-                nombre=nombre,
-                correo=correo,
-                telefono=telefono or None,
-                mensaje=mensaje
-            )
-            db.session.add(m)
-            db.session.commit()
-
-            # Generar y subir documento TXT + adjuntos (si hubiera)
+            m = MensajeContacto(nombre=nombre, correo=correo, telefono=telefono or None, mensaje=mensaje)
+            db.session.add(m); db.session.commit()
             try:
-                save_submission_bundle(
-                    form_slug="contacto",
-                    title="Formulario de Contacto",
-                    folio=None,
-                    email=correo,
-                    upload_attachments=True
-                )
+                save_submission_bundle("contacto","Formulario de Contacto", folio=None, email=correo, upload_attachments=True)
             except Exception as e:
                 app.logger.warning("No se pudo subir el documento de contacto a S3: %s", e)
-
             flash("¡Gracias! Tu mensaje fue enviado.", "success")
             return redirect(url_for("routes.contacto"))
         except Exception as e:
-            db.session.rollback()
-            app.logger.exception("Error guardando contacto: %s", e)
+            db.session.rollback(); app.logger.exception("Error guardando contacto: %s", e)
             flash("Ocurrió un error al guardar tu mensaje. Intenta de nuevo.", "danger")
             return render_template("contacto.html", form=request.form), 500
 
-    # GET
     return render_template("contacto.html")
 
 # =====================================================
@@ -915,26 +760,20 @@ def contacto():
 # =====================================================
 def _row_to_dict(row):
     try:
-        return dict(row._mapping)  # SQLAlchemy 1.4/2.0 Row
+        return dict(row._mapping)
     except Exception:
         return dict(row)
 
 @bp.route("/api/asesores", methods=["GET", "POST"])
 def api_asesores():
     if request.method == "GET":
-        sql = text("""
-            SELECT id, nombre, created_at
-            FROM public.asesores
-            ORDER BY nombre ASC
-        """)
+        sql = text("SELECT id, nombre, created_at FROM public.asesores ORDER BY nombre ASC")
         res = db.session.execute(sql).all()
         return jsonify([_row_to_dict(r) for r in res]), 200
-
     data = request.get_json(silent=True) or request.form or {}
     nombre = (data.get("nombre") or "").strip()
     if not nombre:
         return jsonify({"ok": False, "error": "nombre requerido"}), 400
-
     try:
         sql = text("""
             INSERT INTO public.asesores(nombre)
@@ -947,8 +786,7 @@ def api_asesores():
         db.session.commit()
         return jsonify({"ok": True, "asesor": _row_to_dict(row)}), 200
     except Exception as e:
-        db.session.rollback()
-        app.logger.exception("api_asesores POST error: %s", e)
+        db.session.rollback(); app.logger.exception("api_asesores POST error: %s", e)
         return jsonify({"ok": False, "error": "error guardando asesor"}), 500
 
 @bp.route("/api/referenciados", methods=["POST"])
@@ -958,35 +796,29 @@ def api_referenciados_add():
     nombre = (data.get("nombre") or "").strip()
     if not asesor_id or not nombre:
         return jsonify({"ok": False, "error": "asesor_id y nombre requeridos"}), 400
-
     try:
         sql = text("""
             INSERT INTO public.asesores_referenciados(asesor_id, nombre)
             VALUES (:asesor_id, :nombre)
-            ON CONFLICT (asesor_id, nombre)
-            DO NOTHING
+            ON CONFLICT (asesor_id, nombre) DO NOTHING
             RETURNING id, asesor_id, nombre, created_at
         """)
         row = db.session.execute(sql, {"asesor_id": int(asesor_id), "nombre": nombre}).first()
         if row is None:
-            sql2 = text("""
+            row = db.session.execute(text("""
                 SELECT id, asesor_id, nombre, created_at
                 FROM public.asesores_referenciados
                 WHERE asesor_id=:asesor_id AND nombre=:nombre
-            """)
-            row = db.session.execute(sql2, {"asesor_id": int(asesor_id), "nombre": nombre}).first()
+            """), {"asesor_id": int(asesor_id), "nombre": nombre}).first()
         db.session.commit()
-
-        sql_disp = text("""
+        disp = db.session.execute(text("""
             SELECT UPPER(SUBSTRING(a.nombre FROM 1 FOR 1)) || '. ' || :nombre AS display
             FROM public.asesores a WHERE a.id=:asesor_id
-        """)
-        disp = db.session.execute(sql_disp, {"asesor_id": int(asesor_id), "nombre": nombre}).scalar()
+        """), {"asesor_id": int(asesor_id), "nombre": nombre}).scalar()
         out = _row_to_dict(row); out["display"] = disp
         return jsonify({"ok": True, "referenciado": out}), 200
     except Exception as e:
-        db.session.rollback()
-        app.logger.exception("api_referenciados POST error: %s", e)
+        db.session.rollback(); app.logger.exception("api_referenciados POST error: %s", e)
         return jsonify({"ok": False, "error": "error guardando referenciado"}), 500
 
 @bp.route("/api/asesores/<int:asesor_id>/referenciados", methods=["GET"])
@@ -1021,45 +853,32 @@ FOLIO_RE = re.compile(r"^AEPRA-\d{6}-[A-Z0-9]{4}$")
 @bp.route("/api/asignaciones", methods=["POST"])
 def api_asignar_folio():
     data = request.get_json(silent=True) or request.form or {}
-
     folio = (data.get("folio") or "").strip().upper()
     asesor_id_raw = data.get("asesor_id")
     referenciado_id_raw = data.get("referenciado_id")
-
-    # --- normaliza IDs: '', '0', 0, 'null', 'undefined' => None ---
     def norm_id(val):
-        if val is None:
-            return None
-        if isinstance(val, int):
-            return val if val > 0 else None
+        if val is None: return None
+        if isinstance(val, int): return val if val > 0 else None
         s = str(val).strip().lower()
-        if s in ("", "0", "null", "none", "undefined", "false"):
-            return None
-        return int(s)  # si no es convertible, lanzará ValueError y caerá al except
-
+        if s in ("", "0", "null", "none", "undefined", "false"): return None
+        return int(s)
     try:
-        asesor_id = norm_id(asesor_id_raw)
-        referenciado_id = norm_id(referenciado_id_raw)
+        asesor_id = norm_id(asesor_id_raw); referenciado_id = norm_id(referenciado_id_raw)
     except Exception:
         return jsonify({"ok": False, "error": "IDs inválidos en la solicitud"}), 400
-
     if not folio or not asesor_id:
         return jsonify({"ok": False, "error": "folio y asesor_id son requeridos"}), 400
     if not FOLIO_RE.match(folio):
         return jsonify({"ok": False, "error": "Folio inválido (AEPRA-YYYYMM-XXXX)"}), 400
-
     try:
-        # si viene referenciado_id, valida pertenencia al asesor
         if referenciado_id:
-            sql_chk = text("""
+            ok = db.session.execute(text("""
                 SELECT 1 FROM public.asesores_referenciados
                 WHERE id=:rid AND asesor_id=:aid
-            """)
-            ok = db.session.execute(sql_chk, {"rid": referenciado_id, "aid": asesor_id}).first()
+            """), {"rid": referenciado_id, "aid": asesor_id}).first()
             if not ok:
                 return jsonify({"ok": False, "error": "El referenciado no pertenece al asesor elegido"}), 400
-
-        sql_up = text("""
+        row = db.session.execute(text("""
             INSERT INTO public.folios_asignaciones(folio, asesor_id, referenciado_id)
             VALUES (:folio, :asesor_id, :referenciado_id)
             ON CONFLICT (folio)
@@ -1067,34 +886,20 @@ def api_asignar_folio():
                           referenciado_id=EXCLUDED.referenciado_id,
                           assigned_at=now()
             RETURNING id
-        """)
-        row = db.session.execute(sql_up, {
-            "folio": folio,
-            "asesor_id": asesor_id,
-            "referenciado_id": referenciado_id
-        }).first()
+        """), {"folio": folio, "asesor_id": asesor_id, "referenciado_id": referenciado_id}).first()
         db.session.commit()
         return jsonify({"ok": True, "id": row.id if row else None}), 200
-
     except Exception as e:
-        db.session.rollback()
-        app.logger.exception("api_asignar_folio POST error: %s", e)
+        db.session.rollback(); app.logger.exception("api_asignar_folio POST error: %s", e)
         return jsonify({"ok": False, "error": "error guardando asignación"}), 500
 
 @bp.route("/api/asignaciones/recientes", methods=["GET"])
 def api_asignaciones_recientes():
-    # Reemplaza vista por JOINs directos para no depender de columnas inexistentes
     sql = text("""
         SELECT
-          fa.id,
-          fa.folio,
-          fa.asesor_id,
-          a.nombre AS asesor_nombre,
-          fa.referenciado_id,
-          CASE
-            WHEN fa.referenciado_id IS NULL THEN a.nombre
-            ELSE UPPER(SUBSTRING(a.nombre FROM 1 FOR 1)) || '. ' || ar.nombre
-          END AS asignado_a,
+          fa.id, fa.folio, fa.asesor_id, a.nombre AS asesor_nombre, fa.referenciado_id,
+          CASE WHEN fa.referenciado_id IS NULL THEN a.nombre
+               ELSE UPPER(SUBSTRING(a.nombre FROM 1 FOR 1)) || '. ' || ar.nombre END AS asignado_a,
           fa.assigned_at
         FROM public.folios_asignaciones fa
         JOIN public.asesores a ON a.id = fa.asesor_id
@@ -1110,48 +915,33 @@ ALLOWED_TIPOS_POLIZA = {"Tradicional", "Intermedia", "Plus", "Mascota"}
 
 @bp.route("/api/folios/poliza", methods=["POST"])
 def api_folios_poliza_upsert():
-    """
-    Guarda/actualiza el tipo de póliza para un folio.
-    Requiere que exista la tabla public.folios_poliza (con UNIQUE(folio))
-    y el tipo ENUM poliza_tipo ('Tradicional','Intermedia','Plus','Mascota').
-    """
     data = request.get_json(silent=True) or request.form or {}
     folio = (data.get("folio") or "").strip().upper()
     tipo  = (data.get("tipo") or "").strip().title()
-
     if not folio or not FOLIO_RE.match(folio):
         return jsonify({"ok": False, "error": "Folio inválido. Formato esperado: AEPRA-YYYYMM-XXXX"}), 400
     if tipo not in ALLOWED_TIPOS_POLIZA:
         return jsonify({"ok": False, "error": f"Tipo inválido. Usa: {', '.join(sorted(ALLOWED_TIPOS_POLIZA))}"}), 400
-
-    sql = text("""
-        INSERT INTO public.folios_poliza (folio, tipo)
-        VALUES (:folio, CAST(:tipo AS poliza_tipo))
-        ON CONFLICT (folio) DO UPDATE
-           SET tipo = EXCLUDED.tipo,
-               assigned_at = now()
-        RETURNING folio, tipo::text AS tipo, assigned_at;
-    """)
-
     try:
-        row = db.session.execute(sql, {"folio": folio, "tipo": tipo}).mappings().first()
+        row = db.session.execute(text("""
+            INSERT INTO public.folios_poliza (folio, tipo)
+            VALUES (:folio, CAST(:tipo AS poliza_tipo))
+            ON CONFLICT (folio) DO UPDATE
+               SET tipo = EXCLUDED.tipo,
+                   assigned_at = now()
+            RETURNING folio, tipo::text AS tipo, assigned_at;
+        """), {"folio": folio, "tipo": tipo}).mappings().first()
         db.session.commit()
         return jsonify({
-            "ok": True,
-            "folio": row["folio"],
-            "tipo": row["tipo"],
+            "ok": True, "folio": row["folio"], "tipo": row["tipo"],
             "assigned_at": row["assigned_at"].isoformat() if hasattr(row["assigned_at"], "isoformat") else row["assigned_at"]
         })
     except Exception as e:
-        db.session.rollback()
-        app.logger.exception("api_folios_poliza_upsert error: %s", e)
+        db.session.rollback(); app.logger.exception("api_folios_poliza_upsert error: %s", e)
         return jsonify({"ok": False, "error": "Error guardando tipo de póliza"}), 500
 
 @bp.route("/api/folios/poliza/recientes", methods=["GET"])
 def api_folios_poliza_recientes():
-    """
-    Devuelve las últimas 50 asignaciones de tipo de póliza.
-    """
     sql = text("""
         SELECT folio, tipo::text AS tipo, assigned_at
         FROM public.folios_poliza
@@ -1181,34 +971,22 @@ def api_filtrar_folios():
     asesor_id_raw = request.args.get("asesor_id")
     referenciado_id_raw = request.args.get("referenciado_id")
     q = (request.args.get("q") or "").strip()
-
     def norm_id(val):
-        if val is None:
-            return None
-        if isinstance(val, int):
-            return val if val > 0 else None
+        if val is None: return None
+        if isinstance(val, int): return val if val > 0 else None
         s = str(val).strip().lower()
-        if s in ("", "0", "null", "none", "undefined", "false"):
-            return None
+        if s in ("", "0", "null", "none", "undefined", "false"): return None
         return int(s)
-
     try:
-        asesor_id = norm_id(asesor_id_raw)
-        referenciado_id = norm_id(referenciado_id_raw)
+        asesor_id = norm_id(asesor_id_raw); referenciado_id = norm_id(referenciado_id_raw)
     except Exception:
         return jsonify({"ok": False, "error": "IDs inválidos en la solicitud"}), 400
 
     base = """
         SELECT
-          fa.id,
-          fa.folio,
-          fa.asesor_id,
-          a.nombre AS asesor_nombre,
-          fa.referenciado_id,
-          CASE
-            WHEN fa.referenciado_id IS NULL THEN a.nombre
-            ELSE UPPER(SUBSTRING(a.nombre FROM 1 FOR 1)) || '. ' || ar.nombre
-          END AS asignado_a,
+          fa.id, fa.folio, fa.asesor_id, a.nombre AS asesor_nombre, fa.referenciado_id,
+          CASE WHEN fa.referenciado_id IS NULL THEN a.nombre
+               ELSE UPPER(SUBSTRING(a.nombre FROM 1 FOR 1)) || '. ' || ar.nombre END AS asignado_a,
           fa.assigned_at
         FROM public.folios_asignaciones fa
         JOIN public.asesores a ON a.id = fa.asesor_id
@@ -1217,24 +995,18 @@ def api_filtrar_folios():
     """
     params = {}
     if asesor_id:
-        base += " AND fa.asesor_id = :asesor_id"
-        params["asesor_id"] = asesor_id
+        base += " AND fa.asesor_id = :asesor_id"; params["asesor_id"] = asesor_id
     if referenciado_id:
-        base += " AND fa.referenciado_id = :referenciado_id"
-        params["referenciado_id"] = referenciado_id
+        base += " AND fa.referenciado_id = :referenciado_id"; params["referenciado_id"] = referenciado_id
     if q:
         base += """
             AND (
-              fa.folio ILIKE :q
-              OR a.nombre ILIKE :q
-              OR (CASE
-                    WHEN fa.referenciado_id IS NULL THEN a.nombre
-                    ELSE UPPER(SUBSTRING(a.nombre FROM 1 FOR 1)) || '. ' || ar.nombre
-                  END) ILIKE :q
+              fa.folio ILIKE :q OR a.nombre ILIKE :q OR
+              (CASE WHEN fa.referenciado_id IS NULL THEN a.nombre
+                    ELSE UPPER(SUBSTRING(a.nombre FROM 1 FOR 1)) || '. ' || ar.nombre END) ILIKE :q
             )
         """
         params["q"] = f"%{q}%"
-
     base += " ORDER BY fa.assigned_at DESC LIMIT 200"
     res = db.session.execute(text(base), params).all()
     return jsonify([_row_to_dict(r) for r in res]), 200
