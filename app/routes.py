@@ -8,21 +8,19 @@ from flask import (
     flash, jsonify, current_app as app, Response, session
 )
 from flask_login import (
-    login_user, logout_user, login_required, UserMixin, current_user
+    login_user, logout_user, login_required, current_user
 )
 from sqlalchemy import text
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from app import db, login_manager
+# Importamos desde app para no duplicar login_manager/user
+from app import db, login_manager, SimpleUser
 from app.models import MensajeContacto
 
-# =====================================================
-# ==================  CONFIG / FLAGS  =================
-# =====================================================
 bp = Blueprint("routes", __name__)
 
-# No toques esto: funciona con tu .env actual
+# ===== Config / flags
 FORCE_S3 = os.getenv("FORCE_S3", "0") == "1"
 ALLOWED_EXTS = {"pdf", "png", "jpg", "jpeg", "webp", "heic", "heif"}
 FOLIO_RE = re.compile(r"^AEPRA-\d{6}-[A-Z0-9]{4}$")
@@ -30,29 +28,18 @@ ALLOWED_TIPOS_POLIZA = {"Tradicional", "Intermedia", "Plus", "Mascota"}
 
 @bp.record_once
 def _apply_proxy_and_cookies(state):
-    """
-    Ajustes mínimos necesarios en Render:
-    - Confiar en los encabezados del reverse proxy (https/host).
-    - Marcar cookies como Secure en prod.
-    - *** NO fijamos COOKIE_DOMAIN *** (cookie host-only, como cuando te funcionaba).
-    """
     app = state.app
     try:
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
     except Exception:
         pass
-
     is_prod = os.getenv("RENDER", "false").lower() in {"1", "true"} or os.getenv("FORCE_HTTPS", "1") == "1"
     if is_prod:
-        # no tocamos nombres de cookies ni domain; solo secure/https.
         app.config.setdefault("PREFERRED_URL_SCHEME", "https")
         app.config.setdefault("SESSION_COOKIE_SECURE", True)
         app.config.setdefault("REMEMBER_COOKIE_SECURE", True)
-        # dejamos SameSite y Path por defecto de Flask (evita bloqueos innecesarios)
 
-# =====================================================
-# =====================  S3 CLIENT  ===================
-# =====================================================
+# ===== S3 helpers
 def _current_bucket() -> str:
     bucket = os.getenv("S3_BUCKET") or os.getenv("S3_BUCKET_NAME")
     if not bucket:
@@ -66,39 +53,27 @@ def _get_s3_client():
     if not aws_key or not aws_sec:
         raise RuntimeError("AWS credentials missing")
     import boto3
-    return boto3.client(
-        "s3",
-        aws_access_key_id=aws_key,
-        aws_secret_access_key=aws_sec,
-        region_name=region,
-    )
+    return boto3.client("s3", aws_access_key_id=aws_key, aws_secret_access_key=aws_sec, region_name=region)
 
 def _ext_ok(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[-1].lower() in ALLOWED_EXTS
 
-# =====================================================
-# ===============  STORAGE: S3 / LOCAL  ===============
-# =====================================================
 def _save_file_to_s3(*, file_storage, folder: str, public: bool = True):
     bucket = _current_bucket()
     s3 = _get_s3_client()
-
     filename = secure_filename(file_storage.filename or "archivo.bin")
     raw = file_storage.read()
     size = len(raw)
     mime = mimetypes.guess_type(filename)[0] or file_storage.mimetype or "application/octet-stream"
     key  = f"{folder.strip('/')}/{datetime.now().strftime('%Y%m%dT%H%M%S')}_{filename}"
-
     want_public = (os.getenv("S3_PUBLIC_READ", "0") == "1") and public
     put_kwargs = {"Bucket": bucket, "Key": key, "Body": raw, "ContentType": mime}
     if want_public:
         put_kwargs["ACL"] = "public-read"
-
     try:
         s3.put_object(**put_kwargs)
     except Exception as e:
         try:
-            # si falla por ACL, reintenta sin ACL para buckets privados
             if "AccessDenied" in str(e) or "InvalidArgument" in str(e):
                 s3.put_object(Bucket=bucket, Key=key, Body=raw, ContentType=mime)
             else:
@@ -106,7 +81,6 @@ def _save_file_to_s3(*, file_storage, folder: str, public: bool = True):
         except Exception:
             app.logger.exception("Fallo guardando en S3 (reintento sin ACL)")
             raise
-
     region = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
     base = f"https://{bucket}.s3.amazonaws.com" if region == "us-east-1" else f"https://{bucket}.s3.{region}.amazonaws.com"
     ruta = f"{base}/{key}"
@@ -117,11 +91,9 @@ def _save_file_to_local(*, file_storage, folder: str):
     root = app.config.get("UPLOAD_FOLDER", os.path.join(app.root_path, "uploads"))
     folder_abs = os.path.join(root, folder.strip("/"))
     os.makedirs(folder_abs, exist_ok=True)
-
     filename = secure_filename(file_storage.filename or "archivo.bin")
     filename = f"{datetime.now().strftime('%Y%m%dT%H%M%S')}_{filename}"
     path = os.path.join(folder_abs, filename)
-
     file_storage.save(path)
     size = os.path.getsize(path)
     mime = mimetypes.guess_type(filename)[0] or file_storage.mimetype or "application/octet-stream"
@@ -129,7 +101,6 @@ def _save_file_to_local(*, file_storage, folder: str):
     return ruta, mime, size
 
 def _save_file(*, file_storage, folder: str, public: bool = True):
-    """Intenta S3; si falla y FORCE_S3=1, lanza error. Si FORCE_S3=0, cae a disco."""
     try:
         if (os.getenv("S3_BUCKET") or os.getenv("S3_BUCKET_NAME")):
             return _save_file_to_s3(file_storage=file_storage, folder=folder, public=public)
@@ -139,7 +110,6 @@ def _save_file(*, file_storage, folder: str, public: bool = True):
             raise
     return _save_file_to_local(file_storage=file_storage, folder=folder)
 
-# ------- TXT con envío + adjuntos a S3 --------
 def _upload_bytes_to_s3(bucket: str, key: str, raw: bytes, mime: str = "text/plain", want_public: bool = False):
     s3 = _get_s3_client()
     put_kwargs = {"Bucket": bucket, "Key": key, "Body": raw, "ContentType": mime}
@@ -209,46 +179,33 @@ def _upload_attachments_to_s3(bucket: str, prefix_key: str, files_meta: list):
     s3 = _get_s3_client()
     uploaded = []
     for meta in files_meta:
-        fs = meta["file_storage"]
-        filename = meta["filename"]
-        content_type = meta["content_type"]
+        fs = meta["file_storage"]; filename = meta["filename"]; content_type = meta["content_type"]
         key = f"{os.path.splitext(prefix_key)[0]}/adjuntos/{filename}"
-        fs.stream.seek(0)
-        raw = fs.read()
+        fs.stream.seek(0); raw = fs.read()
         s3.put_object(Bucket=bucket, Key=key, Body=raw, ContentType=content_type)
         uploaded.append({"key": key, "filename": filename, "content_type": content_type, "size": len(raw)})
     return uploaded
 
 def save_submission_bundle(form_slug: str, title: str, folio=None, email=None, upload_attachments: bool = True):
-    """Genera un TXT con todo el envío y lo sube a S3. Adjuntos opcionales."""
     bucket = _current_bucket()
     want_public = (os.getenv("DOC_DEFAULT_PUBLIC", "false").lower() == "true")
-
     data, files_meta = _collect_request_data()
     txt = _serialize_submission_to_txt(title, data, files_meta)
     key_txt = _s3_key_for_submission(form_slug=form_slug, folio=folio, email=email, ext="txt")
-
     _upload_bytes_to_s3(bucket=bucket, key=key_txt, raw=txt, mime="text/plain", want_public=want_public)
     uploaded_files = _upload_attachments_to_s3(bucket=bucket, prefix_key=key_txt, files_meta=files_meta) if upload_attachments else []
     return {"doc_key": key_txt, "uploaded_files": uploaded_files, "data": data}
 
-# =====================================================
-# =====================  HEALTH  ======================
-# =====================================================
+# ===== Health & home
 @bp.route("/health")
 def healthcheck():
     return jsonify({"status": "ok"}), 200
 
-# =====================================================
-# ======================  HOME  =======================
-# =====================================================
 @bp.route("/")
 def home():
     return render_template("index.html")
 
-# =====================================================
-# ===============  HELPERS BASE DE DATOS  =============
-# =====================================================
+# ===== BD helpers
 def _insert_document_with_folio(*, folio, tipo_usuario, usuario_id, tipo_documento, ruta, nombre_archivo, mime, size):
     sql = text("""
         INSERT INTO public.documentos
@@ -311,8 +268,7 @@ def _upsert_arrendador_datos(datos: dict):
             tipo_inmueble        = EXCLUDED.tipo_inmueble,
             superficie_terreno   = EXCLUDED.superficie_terreno,
             metros_construidos   = EXCLUDED.metros_construidos,
-            habitaciones         = EXCLU
-            DED.habitaciones,
+            habitaciones         = EXCLUDED.habitaciones,
             banos                = EXCLUDED.banos,
             estacionamientos     = EXCLUDED.estacionamientos,
             uso_suelo            = EXCLUDED.uso_suelo,
@@ -346,9 +302,7 @@ def _to_home(message: str, category: str = "success"):
     flash(message, category)
     return redirect(url_for("routes.home"))
 
-# =====================================================
-# ===============  CONTROL DE FOLIOS  =================
-# =====================================================
+# ===== Folios
 def _folio_activo(folio: str) -> bool:
     row = db.session.execute(text("SELECT activo FROM public.folios WHERE folio = :f"), {"f": folio}).first()
     return bool(row and row[0])
@@ -375,9 +329,6 @@ def _generar_folio_unico() -> str:
             return folio
     raise RuntimeError("No se pudo generar un folio único")
 
-# =====================================================
-# ===============  API: FOLIOS / COMPAT  ==============
-# =====================================================
 @bp.get("/api/verificar-folio/<folio>")
 def api_verificar_folio(folio):
     ok = _folio_activo((folio or "").upper())
@@ -393,9 +344,7 @@ def api_admin_folio_nuevo():
     folio = _generar_folio_unico()
     return jsonify({"ok": True, "folio": folio})
 
-# =====================================================
-# ===============  VISTAS: DOCUMENTOS  ================
-# =====================================================
+# ===== Vistas: documentos propietario/inquilino
 @bp.route("/documentos/propietario", methods=["GET", "POST"])
 def subir_propietario():
     if request.method == "GET":
@@ -464,7 +413,6 @@ def subir_propietario():
         _marcar_uso_folio(folio, "arrendador")
         db.session.commit()
 
-        # TXT del envío
         try:
             save_submission_bundle("propietario", "Formulario de Propietario", folio=folio, email=datos.get("correo"), upload_attachments=False)
         except Exception as e:
@@ -530,22 +478,12 @@ def subir_inquilino():
         app.logger.exception("Error guardando inquilino")
         return _to_home(f"❌ No se pudieron guardar documentos de inquilino ({folio}). Detalle: {e}", "danger")
 
-# =====================================================
-# =====================  ADMIN  =======================
-# =====================================================
+# ===== Admin / login
 ADMIN_USER = (os.getenv("ADMIN_USER") or "").strip()
 ADMIN_PASS = (os.getenv("ADMIN_PASS") or "").strip()
-USE_FALLBACK = False
 if not ADMIN_USER or not ADMIN_PASS:
-    ADMIN_USER = "admin"; ADMIN_PASS = "admin123"; USE_FALLBACK = True
-
-class AdminUser(UserMixin):
-    def __init__(self, user_id="admin"):
-        self.id = user_id
-
-@login_manager.user_loader
-def load_user(user_id: str):
-    return AdminUser("admin") if user_id == "admin" else None
+    ADMIN_USER = "admin"
+    ADMIN_PASS = "admin123"
 
 @bp.route("/login", methods=["GET", "POST"])
 def login():
@@ -557,8 +495,8 @@ def login():
         password = (request.form.get("password") or "").strip()
 
         if username == ADMIN_USER and password == ADMIN_PASS:
-            # importante: remember=True para que emita también el remember cookie
-            login_user(AdminUser("admin"), remember=True)
+            # Guardamos en sesión el MISMO id que espera el user_loader de app/__init__.py
+            login_user(SimpleUser(ADMIN_USER), remember=True)
             flash("Bienvenido, acceso concedido.", "success")
             dest = request.args.get("next") or url_for("routes.admin")
             return redirect(dest)
@@ -579,9 +517,7 @@ def logout():
 def admin():
     return render_template("admin.html")
 
-# =====================================================
-# ======================  API ADMIN  ==================
-# =====================================================
+# ===== API admin
 @bp.get("/api/admin/folio/<folio>")
 def api_admin_folio(folio):
     conn = db.session.connection()
@@ -685,9 +621,7 @@ def api_admin_polizas():
               "meses_restantes": int(r["meses_restantes"]), "dias_restantes": int(r["dias_restantes"])} for r in rows]
     return jsonify({"items": items, "max_meses": max_meses, "incluir_vencidas": incluir_vencidas})
 
-# =====================================================
-# ==================  OTRAS PÁGINAS  ==================
-# =====================================================
+# ===== Otras páginas
 @bp.route("/terminos-mascotas")
 def terminos_mascotas():
     return render_template("terminos_mascotas.html")
@@ -700,9 +634,7 @@ def politicas():
 def privacidad_alias():
     return redirect(url_for("routes.politicas"), code=301)
 
-# =====================================================
-# ====================  DEBUG API  ====================
-# =====================================================
+# ===== Debug
 @bp.get("/api/debug/consistencia/<folio>")
 def api_debug_consistencia(folio):
     f = (folio or "").strip().upper()
@@ -745,9 +677,7 @@ def debug_whoami():
         "session_keys": {k: session.get(k) for k in ["_user_id", "_fresh"]},
     })
 
-# =====================================================
-# ====================  CONTACTO  =====================
-# =====================================================
+# ===== Contacto (FIX del if)
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 @bp.route("/contacto", methods=["GET", "POST"])
@@ -757,7 +687,7 @@ def contacto():
         correo   = (request.form.get("correo") or "").strip()
         telefono = (request.form.get("telefono") or "").strip()
         mensaje  = (request.form.get("mensaje") or "").strip()
-        if not nombre or not correo or not mensaje:
+        if not nombre or not correo or not mensaje:  # <- FIX aquí
             flash("Nombre, correo y mensaje son obligatorios.", "warning")
             return render_template("contacto.html", form=request.form), 400
         if not EMAIL_RE.match(correo):
@@ -778,9 +708,7 @@ def contacto():
             return render_template("contacto.html", form=request.form), 500
     return render_template("contacto.html")
 
-# =====================================================
-# ==============   API Asesores (Admin)  ==============
-# =====================================================
+# ===== Asesores / referenciados / asignaciones / filtros =====
 def _row_to_dict(row):
     try:
         return dict(row._mapping)
@@ -868,9 +796,6 @@ def api_destinatarios(asesor_id: int):
     res = db.session.execute(sql, {"asesor_id": asesor_id}).all()
     return jsonify([_row_to_dict(r) for r in res]), 200
 
-# =====================================================
-# ==============  ASIGNAR FOLIOS / VISTAS  ============
-# =====================================================
 @bp.route("/api/asignaciones", methods=["POST"])
 def api_asignar_folio():
     data = request.get_json(silent=True) or request.form or {}
@@ -938,7 +863,6 @@ def api_asignaciones_recientes():
     res = db.session.execute(sql).all()
     return jsonify([_row_to_dict(r) for r in res]), 200
 
-# ---------- Asignacion Folios / Poliza ----------
 @bp.route("/api/folios/poliza", methods=["POST"])
 def api_folios_poliza_upsert():
     data = request.get_json(silent=True) or request.form or {}
@@ -978,24 +902,17 @@ def api_folios_poliza_recientes():
         ORDER BY assigned_at DESC
         LIMIT 50;
     """)
-    try:
-        rows = db.session.execute(sql).mappings().all()
-        out = []
-        for r in rows:
-            assigned = r["assigned_at"]
-            out.append({
-                "folio": r["folio"],
-                "tipo": r["tipo"],
-                "assigned_at": assigned.isoformat() if hasattr(assigned, "isoformat") else assigned
-            })
-        return jsonify(out)
-    except Exception as e:
-        app.logger.exception("api_folios_poliza_recientes error: %s", e)
-        return jsonify([]), 200
+    rows = db.session.execute(sql).mappings().all()
+    out = []
+    for r in rows:
+        assigned = r["assigned_at"]
+        out.append({
+            "folio": r["folio"],
+            "tipo": r["tipo"],
+            "assigned_at": assigned.isoformat() if hasattr(assigned, "isoformat") else assigned
+        })
+    return jsonify(out)
 
-# =====================================================
-# ==============  FILTRAR FOLIOS (q + norm) ===========
-# =====================================================
 @bp.route("/api/folios", methods=["GET"])
 def api_filtrar_folios():
     asesor_id_raw = request.args.get("asesor_id")
