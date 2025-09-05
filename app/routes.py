@@ -3,8 +3,6 @@ import os
 import re
 import mimetypes
 from datetime import date, datetime
-from functools import wraps
-
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     flash, jsonify, current_app as app, Response, session
@@ -23,53 +21,44 @@ from app.models import MensajeContacto
 # ==================  CONFIG / FLAGS  =================
 # =====================================================
 bp = Blueprint("routes", __name__)
+
+# No toques esto: funciona con tu .env actual
 FORCE_S3 = os.getenv("FORCE_S3", "0") == "1"
 ALLOWED_EXTS = {"pdf", "png", "jpg", "jpeg", "webp", "heic", "heif"}
+FOLIO_RE = re.compile(r"^AEPRA-\d{6}-[A-Z0-9]{4}$")
+ALLOWED_TIPOS_POLIZA = {"Tradicional", "Intermedia", "Plus", "Mascota"}
 
 @bp.record_once
 def _apply_proxy_and_cookies(state):
-    """Ajustes para proxy de Render y cookies de sesión/remember en prod."""
+    """
+    Ajustes mínimos necesarios en Render:
+    - Confiar en los encabezados del reverse proxy (https/host).
+    - Marcar cookies como Secure en prod.
+    - *** NO fijamos COOKIE_DOMAIN *** (cookie host-only, como cuando te funcionaba).
+    """
     app = state.app
-
-    # Confiar en X-Forwarded-* del proxy (https, host, etc.)
     try:
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
     except Exception:
         pass
 
     is_prod = os.getenv("RENDER", "false").lower() in {"1", "true"} or os.getenv("FORCE_HTTPS", "1") == "1"
-
     if is_prod:
+        # no tocamos nombres de cookies ni domain; solo secure/https.
         app.config.setdefault("PREFERRED_URL_SCHEME", "https")
         app.config.setdefault("SESSION_COOKIE_SECURE", True)
         app.config.setdefault("REMEMBER_COOKIE_SECURE", True)
-        # Si tienes cualquier salto entre subdominios/custom domain,
-        # especifica el dominio de cookie desde env:
-        cookie_domain = (os.getenv("COOKIE_DOMAIN") or "").strip().lstrip(".")
-        if cookie_domain:
-            cookie_domain = "." + cookie_domain  # cookie válida para el apex y subdominios
-            app.config["SESSION_COOKIE_DOMAIN"] = cookie_domain
-            app.config["REMEMBER_COOKIE_DOMAIN"] = cookie_domain
-        # Lax suele bastar; si tu SSO/iframes lo requieren, cambia a 'None'
-        app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
-        app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
-        app.config.setdefault("SESSION_COOKIE_PATH", "/")
-        app.config.setdefault("REMEMBER_COOKIE_SAMESITE", "Lax")
-        app.config.setdefault("REMEMBER_COOKIE_HTTPONLY", True)
-        app.config.setdefault("REMEMBER_COOKIE_PATH", "/")
+        # dejamos SameSite y Path por defecto de Flask (evita bloqueos innecesarios)
 
-def _ext_ok(filename: str) -> bool:
-    return "." in filename and filename.rsplit(".", 1)[-1].lower() in ALLOWED_EXTS
-
+# =====================================================
+# =====================  S3 CLIENT  ===================
+# =====================================================
 def _current_bucket() -> str:
     bucket = os.getenv("S3_BUCKET") or os.getenv("S3_BUCKET_NAME")
     if not bucket:
         raise RuntimeError("S3_BUCKET no está configurado (ni S3_BUCKET_NAME)")
     return bucket
 
-# =====================================================
-# =====================  S3 CLIENT  ===================
-# =====================================================
 def _get_s3_client():
     aws_key = os.getenv("AWS_ACCESS_KEY_ID")
     aws_sec = os.getenv("AWS_SECRET_ACCESS_KEY")
@@ -83,6 +72,9 @@ def _get_s3_client():
         aws_secret_access_key=aws_sec,
         region_name=region,
     )
+
+def _ext_ok(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[-1].lower() in ALLOWED_EXTS
 
 # =====================================================
 # ===============  STORAGE: S3 / LOCAL  ===============
@@ -106,6 +98,7 @@ def _save_file_to_s3(*, file_storage, folder: str, public: bool = True):
         s3.put_object(**put_kwargs)
     except Exception as e:
         try:
+            # si falla por ACL, reintenta sin ACL para buckets privados
             if "AccessDenied" in str(e) or "InvalidArgument" in str(e):
                 s3.put_object(Bucket=bucket, Key=key, Body=raw, ContentType=mime)
             else:
@@ -124,9 +117,11 @@ def _save_file_to_local(*, file_storage, folder: str):
     root = app.config.get("UPLOAD_FOLDER", os.path.join(app.root_path, "uploads"))
     folder_abs = os.path.join(root, folder.strip("/"))
     os.makedirs(folder_abs, exist_ok=True)
+
     filename = secure_filename(file_storage.filename or "archivo.bin")
     filename = f"{datetime.now().strftime('%Y%m%dT%H%M%S')}_{filename}"
     path = os.path.join(folder_abs, filename)
+
     file_storage.save(path)
     size = os.path.getsize(path)
     mime = mimetypes.guess_type(filename)[0] or file_storage.mimetype or "application/octet-stream"
@@ -134,6 +129,7 @@ def _save_file_to_local(*, file_storage, folder: str):
     return ruta, mime, size
 
 def _save_file(*, file_storage, folder: str, public: bool = True):
+    """Intenta S3; si falla y FORCE_S3=1, lanza error. Si FORCE_S3=0, cae a disco."""
     try:
         if (os.getenv("S3_BUCKET") or os.getenv("S3_BUCKET_NAME")):
             return _save_file_to_s3(file_storage=file_storage, folder=folder, public=public)
@@ -143,9 +139,7 @@ def _save_file(*, file_storage, folder: str, public: bool = True):
             raise
     return _save_file_to_local(file_storage=file_storage, folder=folder)
 
-# =====================================================
-# ============  UTILIDADES: DOCUMENTO S3  =============
-# =====================================================
+# ------- TXT con envío + adjuntos a S3 --------
 def _upload_bytes_to_s3(bucket: str, key: str, raw: bytes, mime: str = "text/plain", want_public: bool = False):
     s3 = _get_s3_client()
     put_kwargs = {"Bucket": bucket, "Key": key, "Body": raw, "ContentType": mime}
@@ -160,26 +154,32 @@ def _upload_bytes_to_s3(bucket: str, key: str, raw: bytes, mime: str = "text/pla
         else:
             raise
 
-def _s3_key_for_submission(form_slug: str, folio: str | None, email: str | None, ext: str) -> str:
+def _s3_key_for_submission(form_slug: str, folio, email, ext: str) -> str:
     prefix = os.getenv("S3_DOC_PREFIX", "").lstrip("/")
     if folio:
-        base = folio.upper().replace(" ", "_")
+        base = str(folio).upper().replace(" ", "_")
     elif email:
-        base = email.lower().replace("@", "_at_").replace(".", "_")
+        base = str(email).lower().replace("@", "_at_").replace(".", "_")
     else:
         base = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     return f"{prefix}{form_slug}/{base}.{ext}".lstrip("/")
 
-def _serialize_submission_to_txt(title: str, data: dict, files_meta: list[dict]) -> bytes:
-    lines = [f"{title}", f"Fecha local: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", "-" * 60, "CAMPOS DEL FORMULARIO:"]
+def _serialize_submission_to_txt(title: str, data: dict, files_meta: list) -> bytes:
+    lines = []
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lines.append(f"{title}")
+    lines.append(f"Fecha local: {now}")
+    lines.append("-" * 60)
+    lines.append("CAMPOS DEL FORMULARIO:")
     for k, v in data.items():
-        if isinstance(v, (list, tuple)): v = ", ".join([str(x) for x in v])
+        if isinstance(v, (list, tuple)):
+            v = ", ".join([str(x) for x in v])
         lines.append(f"- {k}: {v}")
     lines.append("")
     lines.append("ADJUNTOS:")
     if files_meta:
-        for fmeta in files_meta:
-            lines.append(f"- nombre: {fmeta.get('filename')}  mime: {fmeta.get('content_type')}  bytes: {fmeta.get('size','?')}")
+        for f in files_meta:
+            lines.append(f"- nombre: {f.get('filename')}  mime: {f.get('content_type')}  bytes: {f.get('size','?')}")
     else:
         lines.append("- (sin adjuntos)")
     lines.append("-" * 60)
@@ -194,28 +194,40 @@ def _collect_request_data():
     files_meta = []
     for k in request.files:
         fs = request.files.get(k)
-        if not fs or fs.filename == "": continue
+        if not fs or fs.filename == "":
+            continue
         filename = secure_filename(fs.filename)
-        files_meta.append({"key": k, "file_storage": fs, "filename": filename, "content_type": fs.mimetype or "application/octet-stream"})
+        files_meta.append({
+            "key": k, "file_storage": fs, "filename": filename,
+            "content_type": fs.mimetype or "application/octet-stream"
+        })
     return data, files_meta
 
-def _upload_attachments_to_s3(bucket: str, prefix_key: str, files_meta: list[dict]):
-    if not files_meta: return []
-    s3 = _get_s3_client(); uploaded = []
+def _upload_attachments_to_s3(bucket: str, prefix_key: str, files_meta: list):
+    if not files_meta:
+        return []
+    s3 = _get_s3_client()
+    uploaded = []
     for meta in files_meta:
-        fs, filename, content_type = meta["file_storage"], meta["filename"], meta["content_type"]
+        fs = meta["file_storage"]
+        filename = meta["filename"]
+        content_type = meta["content_type"]
         key = f"{os.path.splitext(prefix_key)[0]}/adjuntos/{filename}"
-        fs.stream.seek(0); raw = fs.read()
+        fs.stream.seek(0)
+        raw = fs.read()
         s3.put_object(Bucket=bucket, Key=key, Body=raw, ContentType=content_type)
         uploaded.append({"key": key, "filename": filename, "content_type": content_type, "size": len(raw)})
     return uploaded
 
-def save_submission_bundle(form_slug: str, title: str, folio: str | None = None, email: str | None = None, upload_attachments: bool = True):
+def save_submission_bundle(form_slug: str, title: str, folio=None, email=None, upload_attachments: bool = True):
+    """Genera un TXT con todo el envío y lo sube a S3. Adjuntos opcionales."""
     bucket = _current_bucket()
     want_public = (os.getenv("DOC_DEFAULT_PUBLIC", "false").lower() == "true")
+
     data, files_meta = _collect_request_data()
     txt = _serialize_submission_to_txt(title, data, files_meta)
     key_txt = _s3_key_for_submission(form_slug=form_slug, folio=folio, email=email, ext="txt")
+
     _upload_bytes_to_s3(bucket=bucket, key=key_txt, raw=txt, mime="text/plain", want_public=want_public)
     uploaded_files = _upload_attachments_to_s3(bucket=bucket, prefix_key=key_txt, files_meta=files_meta) if upload_attachments else []
     return {"doc_key": key_txt, "uploaded_files": uploaded_files, "data": data}
@@ -299,7 +311,8 @@ def _upsert_arrendador_datos(datos: dict):
             tipo_inmueble        = EXCLUDED.tipo_inmueble,
             superficie_terreno   = EXCLUDED.superficie_terreno,
             metros_construidos   = EXCLUDED.metros_construidos,
-            habitaciones         = EXCLUDED.habitaciones,
+            habitaciones         = EXCLU
+            DED.habitaciones,
             banos                = EXCLUDED.banos,
             estacionamientos     = EXCLUDED.estacionamientos,
             uso_suelo            = EXCLUDED.uso_suelo,
@@ -390,45 +403,29 @@ def subir_propietario():
 
     form = request.form
     folio = (form.get("folio") or "").strip().upper()
-    if not re.match(r"^AEPRA-\d{6}-[A-Z0-9]{4}$", folio):
+    if not FOLIO_RE.match(folio):
         return _to_home("Folio inválido. Verifica el formato AEPRA-YYYYMM-XXXX.", "danger")
     if not _folio_activo(folio):
         return _to_home("El folio no existe o está desactivado. Solicítalo a administración.", "danger")
 
     datos = {
-        "folio": folio,
-        "nombre": form.get("nombre"),
-        "correo": form.get("correo"),
-        "direccion_actual": form.get("direccion_actual"),
-        "rfc": form.get("rfc"),
-        "curp": form.get("curp"),
-        "telefono": form.get("telefono"),
-        "banco": form.get("banco"),
-        "titular_cuenta": form.get("titular_cuenta"),
-        "cuenta_bancaria": form.get("cuenta_bancaria"),
-        "clabe_interbancaria": form.get("clabe_interbancaria"),
-        "direccion": form.get("direccion"),
-        "tipo_inmueble": form.get("tipo_inmueble"),
-        "superficie_terreno": form.get("superficie_terreno"),
-        "metros_construidos": form.get("metros_construidos"),
-        "habitaciones": form.get("habitaciones"),
-        "banos": form.get("banos"),
-        "estacionamientos": form.get("estacionamientos"),
-        "uso_suelo": form.get("uso_suelo"),
-        "cuenta_predial": form.get("cuenta_predial"),
-        "cuenta_agua": form.get("cuenta_agua"),
-        "servicios_pagan": form.get("servicios_pagan"),
-        "caracteristicas": form.get("caracteristicas"),
-        "inventario": form.get("inventario"),
-        "precio_renta": form.get("precio_renta"),
-        "fecha_inicio_renta": form.get("fecha_inicio_renta"),
+        "folio": folio, "nombre": form.get("nombre"), "correo": form.get("correo"),
+        "direccion_actual": form.get("direccion_actual"), "rfc": form.get("rfc"),
+        "curp": form.get("curp"), "telefono": form.get("telefono"), "banco": form.get("banco"),
+        "titular_cuenta": form.get("titular_cuenta"), "cuenta_bancaria": form.get("cuenta_bancaria"),
+        "clabe_interbancaria": form.get("clabe_interbancaria"), "direccion": form.get("direccion"),
+        "tipo_inmueble": form.get("tipo_inmueble"), "superficie_terreno": form.get("superficie_terreno"),
+        "metros_construidos": form.get("metros_construidos"), "habitaciones": form.get("habitaciones"),
+        "banos": form.get("banos"), "estacionamientos": form.get("estacionamientos"),
+        "uso_suelo": form.get("uso_suelo"), "cuenta_predial": form.get("cuenta_predial"),
+        "cuenta_agua": form.get("cuenta_agua"), "servicios_pagan": form.get("servicios_pagan"),
+        "caracteristicas": form.get("caracteristicas"), "inventario": form.get("inventario"),
+        "precio_renta": form.get("precio_renta"), "fecha_inicio_renta": form.get("fecha_inicio_renta"),
         "fecha_firma_contrato": form.get("fecha_firma_contrato"),
     }
-    requeridos = [
-        "nombre","correo","direccion_actual","rfc","curp","telefono",
-        "banco","titular_cuenta","cuenta_bancaria","clabe_interbancaria",
-        "direccion","precio_renta","fecha_inicio_renta","fecha_firma_contrato"
-    ]
+    requeridos = ["nombre","correo","direccion_actual","rfc","curp","telefono",
+                  "banco","titular_cuenta","cuenta_bancaria","clabe_interbancaria",
+                  "direccion","precio_renta","fecha_inicio_renta","fecha_firma_contrato"]
     faltantes = [k for k in requeridos if not (datos.get(k) or "").strip()]
     if faltantes:
         return _to_home(f"Campos obligatorios faltantes: {', '.join(faltantes)}", "danger")
@@ -467,11 +464,9 @@ def subir_propietario():
         _marcar_uso_folio(folio, "arrendador")
         db.session.commit()
 
+        # TXT del envío
         try:
-            save_submission_bundle(
-                form_slug="propietario", title="Formulario de Propietario",
-                folio=folio, email=datos.get("correo"), upload_attachments=False
-            )
+            save_submission_bundle("propietario", "Formulario de Propietario", folio=folio, email=datos.get("correo"), upload_attachments=False)
         except Exception as e:
             app.logger.warning("Bundle TXT propietario no subido: %s", e)
 
@@ -490,13 +485,14 @@ def subir_inquilino():
 
     form = request.form
     folio = (form.get("folio") or "").strip().upper()
-    if not re.match(r"^AEPRA-\d{6}-[A-Z0-9]{4}$", folio):
+    if not FOLIO_RE.match(folio):
         return _to_home("Folio inválido. Verifica el formato AEPRA-YYYYMM-XXXX.", "danger")
     if not _folio_activo(folio):
         return _to_home("El folio no existe o está desactivado. Solicítalo a administración.", "danger")
 
     try:
         inq_id = _get_or_create_usuario_id_por_folio(tabla="arrendatarios", folio=folio)
+
         datos_inq = {
             "folio": folio,
             "lugar_nacimiento": (form.get("lugar_nacimiento") or None),
@@ -506,8 +502,10 @@ def subir_inquilino():
 
         guardados = []
         for clave, fs in request.files.items():
-            if not fs or fs.filename == "": continue
-            if not _ext_ok(fs.filename): raise ValueError(f"Extensión no permitida: {fs.filename}")
+            if not fs or fs.filename == "":
+                continue
+            if not _ext_ok(fs.filename):
+                raise ValueError(f"Extensión no permitida: {fs.filename}")
             ruta, mime, size = _save_file(file_storage=fs, folder=f"arrendatario/{folio}/{inq_id}", public=True)
             _insert_document_with_folio(
                 folio=folio, tipo_usuario="arrendatario", usuario_id=inq_id,
@@ -541,16 +539,9 @@ USE_FALLBACK = False
 if not ADMIN_USER or not ADMIN_PASS:
     ADMIN_USER = "admin"; ADMIN_PASS = "admin123"; USE_FALLBACK = True
 
-import logging
-_auth_logger = logging.getLogger("auth")
-_auth_logger.warning(
-    "LOGIN TRY in routes: config -> user_set=%s pass_len=%d%s",
-    bool(ADMIN_USER), len(ADMIN_PASS or ""),
-    " [FALLBACK DEV ENABLED]" if USE_FALLBACK else ""
-)
-
 class AdminUser(UserMixin):
-    def __init__(self, user_id="admin"): self.id = user_id
+    def __init__(self, user_id="admin"):
+        self.id = user_id
 
 @login_manager.user_loader
 def load_user(user_id: str):
@@ -564,16 +555,10 @@ def login():
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
         password = (request.form.get("password") or "").strip()
-        try:
-            app.logger.warning(
-                "LOGIN TRY -> user=%r match_user=%s match_pass=%s",
-                username, (username == ADMIN_USER), (password == ADMIN_PASS)
-            )
-        except Exception:
-            pass
 
         if username == ADMIN_USER and password == ADMIN_PASS:
-            login_user(AdminUser("admin"))
+            # importante: remember=True para que emita también el remember cookie
+            login_user(AdminUser("admin"), remember=True)
             flash("Bienvenido, acceso concedido.", "success")
             dest = request.args.get("next") or url_for("routes.admin")
             return redirect(dest)
@@ -629,13 +614,9 @@ def api_admin_folio(folio):
     documentos = []
     for r in cur.fetchall():
         documentos.append({
-            "tipo_usuario": r[0],
-            "tipo_documento": r[1],
-            "nombre_archivo": r[2],
-            "mime": r[3],
-            "tamano_bytes": int(r[4]) if r[4] is not None else None,
-            "ruta": r[5],
-            "fecha_subida": r[6].isoformat() if r[6] else None,
+            "tipo_usuario": r[0], "tipo_documento": r[1], "nombre_archivo": r[2],
+            "mime": r[3], "tamano_bytes": int(r[4]) if r[4] is not None else None,
+            "ruta": r[5], "fecha_subida": r[6].isoformat() if r[6] else None,
         })
 
     cur = conn.execute(text("""
@@ -684,20 +665,15 @@ def api_admin_polizas():
 
     sql = text("""
         with pol as (
-          select
-            folio,
-            fecha_inicio,
-            fecha_fin,
-            (extract(year  from age(fecha_fin, current_date))::int * 12)
-          + (extract(month from age(fecha_fin, current_date))::int)          as meses_restantes,
-            (fecha_fin - current_date)                                        as dias_restantes
+          select folio, fecha_inicio, fecha_fin,
+            (extract(year from age(fecha_fin, current_date))::int * 12)
+          + (extract(month from age(fecha_fin, current_date))::int) as meses_restantes,
+            (fecha_fin - current_date) as dias_restantes
           from polizas
         )
-        select folio,
-               to_char(fecha_inicio, 'YYYY-MM-DD') as fecha_inicio,
-               to_char(fecha_fin,    'YYYY-MM-DD') as fecha_fin,
-               meses_restantes,
-               dias_restantes
+        select folio, to_char(fecha_inicio,'YYYY-MM-DD') as fecha_inicio,
+               to_char(fecha_fin,'YYYY-MM-DD') as fecha_fin,
+               meses_restantes, dias_restantes
         from pol
         where meses_restantes <= :max_meses
           and (:incl = true or dias_restantes >= 0)
@@ -705,16 +681,8 @@ def api_admin_polizas():
         limit 500
     """)
     rows = db.session.execute(sql, {"max_meses": max_meses, "incl": incluir_vencidas}).mappings().all()
-
-    items = []
-    for r in rows:
-        items.append({
-            "folio": r["folio"],
-            "fecha_inicio": r["fecha_inicio"],
-            "fecha_fin": r["fecha_fin"],
-            "meses_restantes": int(r["meses_restantes"]),
-            "dias_restantes": int(r["dias_restantes"]),
-        })
+    items = [{"folio": r["folio"], "fecha_inicio": r["fecha_inicio"], "fecha_fin": r["fecha_fin"],
+              "meses_restantes": int(r["meses_restantes"]), "dias_restantes": int(r["dias_restantes"])} for r in rows]
     return jsonify({"items": items, "max_meses": max_meses, "incluir_vencidas": incluir_vencidas})
 
 # =====================================================
@@ -739,20 +707,17 @@ def privacidad_alias():
 def api_debug_consistencia(folio):
     f = (folio or "").strip().upper()
     out = {}
-
     r = db.session.execute(text("""
         SELECT folio, activo, usos_arrendador, usos_arrendatario, ultima_actividad_at
         FROM public.folios WHERE folio = :f
     """), {"f": f}).mappings().first()
     out["folios"] = dict(r) if r else None
-
     r = db.session.execute(text("""
         SELECT id, folio, nombre, correo, direccion_actual, created_at, updated_at
         FROM public.arrendadores WHERE folio = :f
         ORDER BY id DESC LIMIT 1
     """), {"f": f}).mappings().first()
     out["arrendadores"] = dict(r) if r else None
-
     docs = db.session.execute(text("""
         SELECT tipo_usuario, tipo_documento, nombre_archivo, ruta, fecha_subida
         FROM public.documentos WHERE folio = :f
@@ -760,7 +725,6 @@ def api_debug_consistencia(folio):
         LIMIT 50
     """), {"f": f}).mappings().all()
     out["documentos"] = [dict(x) for x in docs]
-
     return jsonify(out)
 
 @bp.get("/api/debug/s3")
@@ -793,14 +757,12 @@ def contacto():
         correo   = (request.form.get("correo") or "").strip()
         telefono = (request.form.get("telefono") or "").strip()
         mensaje  = (request.form.get("mensaje") or "").strip()
-
         if not nombre or not correo or not mensaje:
             flash("Nombre, correo y mensaje son obligatorios.", "warning")
             return render_template("contacto.html", form=request.form), 400
         if not EMAIL_RE.match(correo):
             flash("Correo no válido.", "warning")
             return render_template("contacto.html", form=request.form), 400
-
         try:
             m = MensajeContacto(nombre=nombre, correo=correo, telefono=telefono or None, mensaje=mensaje)
             db.session.add(m); db.session.commit()
@@ -814,7 +776,6 @@ def contacto():
             db.session.rollback(); app.logger.exception("Error guardando contacto: %s", e)
             flash("Ocurrió un error al guardar tu mensaje. Intenta de nuevo.", "danger")
             return render_template("contacto.html", form=request.form), 500
-
     return render_template("contacto.html")
 
 # =====================================================
@@ -829,19 +790,13 @@ def _row_to_dict(row):
 @bp.route("/api/asesores", methods=["GET", "POST"])
 def api_asesores():
     if request.method == "GET":
-        sql = text("""
-            SELECT id, nombre, created_at
-            FROM public.asesores
-            ORDER BY nombre ASC
-        """)
+        sql = text("SELECT id, nombre, created_at FROM public.asesores ORDER BY nombre ASC")
         res = db.session.execute(sql).all()
         return jsonify([_row_to_dict(r) for r in res]), 200
-
     data = request.get_json(silent=True) or request.form or {}
     nombre = (data.get("nombre") or "").strip()
     if not nombre:
         return jsonify({"ok": False, "error": "nombre requerido"}), 400
-
     try:
         sql = text("""
             INSERT INTO public.asesores(nombre)
@@ -914,10 +869,8 @@ def api_destinatarios(asesor_id: int):
     return jsonify([_row_to_dict(r) for r in res]), 200
 
 # =====================================================
-# ==============  ASIGNAR FOLIOS (robusto) ============
+# ==============  ASIGNAR FOLIOS / VISTAS  ============
 # =====================================================
-FOLIO_RE = re.compile(r"^AEPRA-\d{6}-[A-Z0-9]{4}$")
-
 @bp.route("/api/asignaciones", methods=["POST"])
 def api_asignar_folio():
     data = request.get_json(silent=True) or request.form or {}
@@ -972,15 +925,9 @@ def api_asignar_folio():
 def api_asignaciones_recientes():
     sql = text("""
         SELECT
-          fa.id,
-          fa.folio,
-          fa.asesor_id,
-          a.nombre AS asesor_nombre,
-          fa.referenciado_id,
-          CASE
-            WHEN fa.referenciado_id IS NULL THEN a.nombre
-            ELSE UPPER(SUBSTRING(a.nombre FROM 1 FOR 1)) || '. ' || ar.nombre
-          END AS asignado_a,
+          fa.id, fa.folio, fa.asesor_id, a.nombre AS asesor_nombre, fa.referenciado_id,
+          CASE WHEN fa.referenciado_id IS NULL THEN a.nombre
+               ELSE UPPER(SUBSTRING(a.nombre FROM 1 FOR 1)) || '. ' || ar.nombre END AS asignado_a,
           fa.assigned_at
         FROM public.folios_asignaciones fa
         JOIN public.asesores a ON a.id = fa.asesor_id
@@ -992,8 +939,6 @@ def api_asignaciones_recientes():
     return jsonify([_row_to_dict(r) for r in res]), 200
 
 # ---------- Asignacion Folios / Poliza ----------
-ALLOWED_TIPOS_POLIZA = {"Tradicional", "Intermedia", "Plus", "Mascota"}
-
 @bp.route("/api/folios/poliza", methods=["POST"])
 def api_folios_poliza_upsert():
     data = request.get_json(silent=True) or request.form or {}
@@ -1072,11 +1017,7 @@ def api_filtrar_folios():
 
     base = """
         SELECT
-          fa.id,
-          fa.folio,
-          fa.asesor_id,
-          a.nombre AS asesor_nombre,
-          fa.referenciado_id,
+          fa.id, fa.folio, fa.asesor_id, a.nombre AS asesor_nombre, fa.referenciado_id,
           CASE
             WHEN fa.referenciado_id IS NULL THEN a.nombre
             ELSE UPPER(SUBSTRING(a.nombre FROM 1 FOR 1)) || '. ' || ar.nombre
