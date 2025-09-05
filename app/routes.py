@@ -677,7 +677,7 @@ def debug_whoami():
         "session_keys": {k: session.get(k) for k in ["_user_id", "_fresh"]},
     })
 
-# ===== Contacto (FIX del if)
+# ===== Contacto (FIX)
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 @bp.route("/contacto", methods=["GET", "POST"])
@@ -687,7 +687,7 @@ def contacto():
         correo   = (request.form.get("correo") or "").strip()
         telefono = (request.form.get("telefono") or "").strip()
         mensaje  = (request.form.get("mensaje") or "").strip()
-        if not nombre or not correo or not mensaje:  # <- FIX aquí
+        if not nombre or not correo or not mensaje:
             flash("Nombre, correo y mensaje son obligatorios.", "warning")
             return render_template("contacto.html", form=request.form), 400
         if not EMAIL_RE.match(correo):
@@ -830,21 +830,29 @@ def api_asignar_folio():
             if not ok:
                 return jsonify({"ok": False, "error": "El referenciado no pertenece al asesor elegido"}), 400
 
-        row = db.session.execute(text("""
-            INSERT INTO public.folios_asignaciones(folio, asesor_id, referenciado_id)
-            VALUES (:folio, :asesor_id, :referenciado_id)
-            ON CONFLICT (folio)
-            DO UPDATE SET asesor_id=EXCLUDED.asesor_id,
-                          referenciado_id=EXCLUDED.referenciado_id,
-                          assigned_at=now()
-            RETURNING id
-        """), {"folio": folio, "asesor_id": asesor_id, "referenciado_id": referenciado_id}).first()
+        # UPDATE → si no afecta filas, INSERT
+        upd = db.session.execute(text("""
+            UPDATE public.folios_asignaciones
+               SET asesor_id=:asesor_id,
+                   referenciado_id=:referenciado_id,
+                   assigned_at=now()
+             WHERE folio=:folio
+        """), {"folio": folio, "asesor_id": asesor_id, "referenciado_id": referenciado_id})
+
+        if upd.rowcount == 0:
+            db.session.execute(text("""
+                INSERT INTO public.folios_asignaciones
+                    (folio, asesor_id, referenciado_id, assigned_at)
+                VALUES (:folio, :asesor_id, :referenciado_id, now())
+            """), {"folio": folio, "asesor_id": asesor_id, "referenciado_id": referenciado_id})
+
         db.session.commit()
-        return jsonify({"ok": True, "id": row.id if row else None}), 200
+        return jsonify({"ok": True}), 200
 
     except Exception as e:
-        db.session.rollback(); app.logger.exception("api_asignar_folio POST error: %s", e)
-        return jsonify({"ok": False, "error": "error guardando asignación"}), 500
+        db.session.rollback()
+        app.logger.exception("api_asignar_folio POST error: %s", e)
+        return jsonify({"ok": False, "error": "error guardando asignación", "error_detail": str(e)}), 500
 
 @bp.route("/api/asignaciones/recientes", methods=["GET"])
 def api_asignaciones_recientes():
@@ -875,24 +883,48 @@ def api_folios_poliza_upsert():
         return jsonify({"ok": False, "error": f"Tipo inválido. Usa: {', '.join(sorted(ALLOWED_TIPOS_POLIZA))}"}), 400
 
     try:
-        row = db.session.execute(text("""
-            INSERT INTO public.folios_poliza (folio, tipo)
-            VALUES (:folio, CAST(:tipo AS poliza_tipo))
-            ON CONFLICT (folio) DO UPDATE
-               SET tipo = EXCLUDED.tipo,
-                   assigned_at = now()
-            RETURNING folio, tipo::text AS tipo, assigned_at;
-        """), {"folio": folio, "tipo": tipo}).mappings().first()
+        # ¿La columna 'tipo' es ENUM poliza_tipo?
+        col = db.session.execute(text("""
+            SELECT data_type, udt_name
+              FROM information_schema.columns
+             WHERE table_schema='public'
+               AND table_name='folios_poliza'
+               AND column_name='tipo'
+             LIMIT 1
+        """)).mappings().first()
+        is_enum = bool(col and col.get("data_type") == "USER-DEFINED" and col.get("udt_name") == "poliza_tipo")
+
+        if is_enum:
+            upd = db.session.execute(text("""
+                UPDATE public.folios_poliza
+                   SET tipo = CAST(:tipo AS poliza_tipo),
+                       assigned_at = now()
+                 WHERE folio = :folio
+            """), {"folio": folio, "tipo": tipo})
+            if upd.rowcount == 0:
+                db.session.execute(text("""
+                    INSERT INTO public.folios_poliza (folio, tipo, assigned_at)
+                    VALUES (:folio, CAST(:tipo AS poliza_tipo), now())
+                """), {"folio": folio, "tipo": tipo})
+        else:
+            upd = db.session.execute(text("""
+                UPDATE public.folios_poliza
+                   SET tipo = :tipo,
+                       assigned_at = now()
+                 WHERE folio = :folio
+            """), {"folio": folio, "tipo": tipo})
+            if upd.rowcount == 0:
+                db.session.execute(text("""
+                    INSERT INTO public.folios_poliza (folio, tipo, assigned_at)
+                    VALUES (:folio, :tipo, now())
+                """), {"folio": folio, "tipo": tipo})
+
         db.session.commit()
-        return jsonify({
-            "ok": True,
-            "folio": row["folio"],
-            "tipo": row["tipo"],
-            "assigned_at": row["assigned_at"].isoformat() if hasattr(row["assigned_at"], "isoformat") else row["assigned_at"]
-        })
+        return jsonify({"ok": True, "folio": folio, "tipo": tipo})
     except Exception as e:
-        db.session.rollback(); app.logger.exception("api_folios_poliza_upsert error: %s", e)
-        return jsonify({"ok": False, "error": "Error guardando tipo de póliza"}), 500
+        db.session.rollback()
+        app.logger.exception("api_folios_poliza_upsert error: %s", e)
+        return jsonify({"ok": False, "error": "Error guardando tipo de póliza", "error_detail": str(e)}), 500
 
 @bp.route("/api/folios/poliza/recientes", methods=["GET"])
 def api_folios_poliza_recientes():
