@@ -204,6 +204,17 @@ def healthcheck():
 @bp.route("/")
 def home():
     return render_template("index.html")
+@bp.route("/sitemap.xml")
+def sitemap():
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://aepra.com.mx/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>"""
+    return Response(xml, mimetype="application/xml")
 
 # ===== BD helpers
 def _insert_document_with_folio(*, folio, tipo_usuario, usuario_id, tipo_documento, ruta, nombre_archivo, mime, size):
