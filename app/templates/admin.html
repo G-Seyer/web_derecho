@@ -121,7 +121,7 @@
   </div>
 
   <!-- FILTRO DE PÓLIZAS POR MESES RESTANTES -->
-  <div class="card mb-5">
+  <div class="card mb-4">
     <div class="card-body">
       <h2 class="h5 mb-3">Filtrar pólizas por meses restantes</h2>
       <form id="frmFiltro" class="row g-2 align-items-center">
@@ -159,6 +159,46 @@
           <tbody id="tbodyPolizas"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- SUBIR PROPIETARIO (TXT EN LUGAR DE DOCUMENTOS) -->
+  <div class="card mb-5">
+    <div class="card-body">
+      <h2 class="h5 mb-3">Subir propietario (TXT explicativo)</h2>
+      <p class="text-muted small">
+        Esta opción permite que el administrador registre un propietario usando un archivo
+        <span class="mono">.txt</span> en el bucket. El archivo explicará por qué no se subieron
+        los documentos completos. Este TXT se colocará en las carpetas de formularios y del arrendador
+        para el folio indicado.
+      </p>
+      <form id="frmSubirProp" class="row g-3">
+        <div class="col-md-4">
+          <label for="folioSubirProp" class="form-label">Folio</label>
+          <input
+            id="folioSubirProp"
+            class="form-control mono"
+            placeholder="AEPRA-YYYYMM-XXXX"
+            required
+            pattern="^AEPRA-\d{6}-[A-Z0-9]{4}$"
+            oninput="this.value=this.value.toUpperCase().replace(/\s+/g,'');">
+          <div class="form-text">Debe ser un folio válido ya generado.</div>
+        </div>
+        <div class="col-md-8">
+          <label for="descripcionProp" class="form-label">Descripción (contenido del TXT)</label>
+          <textarea
+            id="descripcionProp"
+            class="form-control"
+            rows="3"
+            placeholder="Ej. No se suben documentos completos porque fueron validados físicamente en oficina..."
+            required></textarea>
+        </div>
+        <div class="col-12 d-flex justify-content-end">
+          <button type="submit" class="btn btn-primary">
+            Guardar TXT de propietario
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -290,6 +330,47 @@ frmFiltro.addEventListener('submit', async (e)=>{
     tbodyPolizas.appendChild(tr);
   });
 });
+
+// -------- Subir propietario (TXT explicativo) --------
+const frmSubirProp = document.getElementById('frmSubirProp');
+if (frmSubirProp) {
+  frmSubirProp.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const folioInput = document.getElementById('folioSubirProp');
+    const descInput  = document.getElementById('descripcionProp');
+
+    const folio = folioInput.value.trim().toUpperCase().replace(/\s+/g,'');
+    const descripcion = (descInput.value || '').trim();
+
+    if (!/^AEPRA-\d{6}-[A-Z0-9]{4}$/.test(folio)) {
+      folioInput.reportValidity();
+      return;
+    }
+    if (!descripcion) {
+      alert('Escribe una descripción para el TXT.');
+      descInput.focus();
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/subir-propietario-txt', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ folio, descripcion })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        alert('TXT de propietario guardado correctamente.');
+        frmSubirProp.reset();
+      } else {
+        alert(data.error || 'No se pudo guardar el TXT.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión al guardar el TXT.');
+    }
+  });
+}
 </script>
 
 <!-- ======================================================= -->
@@ -298,8 +379,41 @@ frmFiltro.addEventListener('submit', async (e)=>{
 <!-- WRAPPER PARA CENTRAR Y NO PEGAR A LOS BORDES -->
 <div class="row">
   <div class="col-12 col-md-11 col-lg-9 col-xl-8 mx-auto px-2">
+    <!-- 0) Ver folios (resumen general) -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Ver folios</h2>
+        <p class="text-muted small mb-3">
+          Aquí se muestran los folios activos, a quién están asignados y si tienen
+          documentos en las carpetas de arrendador, arrendatario y formularios.
+        </p>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <button id="btnRefrescarFoliosResumen" class="btn btn-outline-primary btn-sm">
+            Actualizar lista
+          </button>
+          <small class="text-muted">Se listan hasta 500 folios activos.</small>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>Folio</th>
+                <th>Asignado a</th>
+                <th class="text-center">Arrendador</th>
+                <th class="text-center">Arrendatario</th>
+                <th class="text-center">Formularios</th>
+                <th class="text-end">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-folios-resumen">
+              <tr><td colspan="6" class="text-muted">Sin datos aún</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
 
-    <!-- 1) Registro de Asesores -->
+    <!-- 1) Registro de asesores -->
     <div class="card mb-4">
       <div class="card-body">
         <h2 class="h5 mb-3">Registro de asesores</h2>
@@ -477,6 +591,7 @@ frmFiltro.addEventListener('submit', async (e)=>{
     });
     return r.json();
   }
+  
 
   const el = {
     listaAsesores: $('#lista-asesores'),
@@ -499,6 +614,9 @@ frmFiltro.addEventListener('submit', async (e)=>{
     filtroReferenciado: $('#filtro_referenciado'),
     btnFiltrar: $('#btnFiltrarFolios'),
     tablaFiltro: $('#tabla-folios-filtrados'),
+    tablaFoliosResumen: $('#tabla-folios-resumen'),
+    btnRefrescarFoliosResumen: $('#btnRefrescarFoliosResumen'),
+
   };
 
   function setOptions(sel, arr, value='id', label='display'){
@@ -622,10 +740,91 @@ frmFiltro.addEventListener('submit', async (e)=>{
       .map(x=>`<tr><td class="mono">${x.folio}</td><td>${x.asesor_nombre}</td><td>${x.asignado_a||''}</td><td>${new Date(x.assigned_at).toLocaleString()}</td></tr>`)
       .join('');
   });
+  // --------- VER FOLIOS (resumen general) ---------
+  async function cargarFoliosResumen(){
+    if(!el.tablaFoliosResumen) return;
+    el.tablaFoliosResumen.innerHTML =
+      '<tr><td colspan="6" class="text-muted">Cargando folios...</td></tr>';
+
+    try{
+      const list = await apiGet('/api/admin/folios-resumen');
+      if(!Array.isArray(list) || !list.length){
+        el.tablaFoliosResumen.innerHTML =
+          '<tr><td colspan="6" class="text-muted">Sin folios activos</td></tr>';
+        return;
+      }
+
+      const check = v => v ? '✅' : '—';
+
+      el.tablaFoliosResumen.innerHTML = list.map(r => {
+        const asignado = r.asignado_a || r.asesor_nombre || '';
+        return `
+          <tr>
+            <td class="mono">${r.folio}</td>
+            <td>${asignado || '<span class="text-muted">Sin asignar</span>'}</td>
+            <td class="text-center">${check(r.docs_arrendador)}</td>
+            <td class="text-center">${check(r.docs_arrendatario)}</td>
+            <td class="text-center">${check(r.docs_formularios)}</td>
+            <td class="text-end">
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-danger btn-borrar-folio"
+                data-folio="${r.folio}"
+              >
+                Borrar
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }catch(e){
+      console.error(e);
+      el.tablaFoliosResumen.innerHTML =
+        '<tr><td colspan="6" class="text-danger">Error cargando folios</td></tr>';
+    }
+  }
+
+  el.btnRefrescarFoliosResumen?.addEventListener('click', cargarFoliosResumen);
+
+  // Manejo de clic en botón "Borrar" (delegado sobre la tabla)
+  async function borrarFolio(folio){
+    if(!folio) return;
+    const ok = confirm(
+      `¿Seguro que quieres borrar el folio ${folio} y TODOS sus documentos y registros?\n\n` +
+      `Esta acción es irreversible.`
+    );
+    if(!ok) return;
+
+    try{
+      const res = await fetch(`/api/admin/folio/${encodeURIComponent(folio)}/borrar`, {
+        method: 'DELETE',
+        headers: {'Accept':'application/json'}
+      });
+      const data = await res.json();
+      if(data.ok){
+        alert(`Folio ${folio} borrado correctamente.`);
+        await cargarFoliosResumen();
+      }else{
+        alert(data.error || 'No se pudo borrar el folio.');
+      }
+    }catch(err){
+      console.error(err);
+      alert('Error de conexión al intentar borrar el folio.');
+    }
+  }
+
+  el.tablaFoliosResumen?.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.btn-borrar-folio');
+    if(!btn) return;
+    const folio = btn.getAttribute('data-folio');
+    borrarFolio(folio);
+  });
+
 
   // Arranque
   cargarAsesores();
   cargarAsignacionesRecientes();
+  cargarFoliosResumen();
 
   // ---------- Póliza: asignar tipo a folio ----------
   const polizaFolio = document.getElementById('poliza_folio');

@@ -632,6 +632,362 @@ def api_admin_polizas():
               "meses_restantes": int(r["meses_restantes"]), "dias_restantes": int(r["dias_restantes"])} for r in rows]
     return jsonify({"items": items, "max_meses": max_meses, "incluir_vencidas": incluir_vencidas})
 
+@bp.post("/api/admin/subir-propietario-txt")
+def api_admin_subir_propietario_txt():
+    """
+    Permite al admin generar un TXT de propietario que explique por qué
+    no se suben los documentos completos. El TXT se sube al bucket en:
+    - formularios/propietario/{folio}_admin.txt
+    - arrendador/{folio}/PROPIETARIO_ADMIN.txt
+    """
+    data = request.get_json(silent=True) or {}
+    folio = (data.get("folio") or "").strip().upper()
+    descripcion = (data.get("descripcion") or "").strip()
+
+    # Validaciones básicas
+    if not folio or not FOLIO_RE.match(folio):
+        return jsonify({"ok": False, "error": "Folio inválido. Formato esperado: AEPRA-YYYYMM-XXXX"}), 400
+    if not _folio_activo(folio):
+        return jsonify({"ok": False, "error": "El folio no existe o está desactivado."}), 400
+    if not descripcion:
+        return jsonify({"ok": False, "error": "La descripción no puede ir vacía."}), 400
+
+    try:
+        bucket = _current_bucket()
+    except Exception as e:
+        app.logger.exception("No se pudo obtener el bucket S3")
+        return jsonify({"ok": False, "error": f"No se encontró configuración de S3: {e}"}), 500
+
+    # Construimos el contenido del TXT
+    ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lineas = [
+        "TXT generado por administrador – PROPIETARIO",
+        f"Folio: {folio}",
+        f"Fecha local: {ahora}",
+        "-" * 60,
+        "Motivo / explicación:",
+        descripcion,
+        "-" * 60,
+        "NOTA: Este TXT se utiliza cuando no se suben los documentos completos del propietario.",
+    ]
+    raw = ("\n".join(lineas) + "\n").encode("utf-8")
+
+    # Respeta el prefijo configurado (S3_DOC_PREFIX) si existe
+    prefix = os.getenv("S3_DOC_PREFIX", "").strip("/")
+
+    def _build_key(rel_path: str) -> str:
+        rel_path = rel_path.lstrip("/")
+        if prefix:
+            return f"{prefix}/{rel_path}".lstrip("/")
+        return rel_path
+
+    # 1) Apartado "formularios" (ej.: formularios/propietario/AEPRA-202601-XXXX_admin.txt)
+    key_formularios = _build_key(f"formularios/propietario/{folio}_admin.txt")
+
+    # 2) Apartado "arrendador" (ej.: arrendador/AEPRA-202601-XXXX/PROPIETARIO_ADMIN.txt)
+    key_arrendador = _build_key(f"arrendador/{folio}/PROPIETARIO_ADMIN.txt")
+
+    want_public = (os.getenv("DOC_DEFAULT_PUBLIC", "false").lower() == "true")
+
+    try:
+        # Subimos el mismo contenido a las dos rutas
+        _upload_bytes_to_s3(
+            bucket=bucket,
+            key=key_formularios,
+            raw=raw,
+            mime="text/plain",
+            want_public=want_public,
+        )
+        _upload_bytes_to_s3(
+            bucket=bucket,
+            key=key_arrendador,
+            raw=raw,
+            mime="text/plain",
+            want_public=want_public,
+        )
+
+        # ------------ Nuevo: reflejar el TXT en la tabla documentos ------------
+        try:
+            # Aseguramos que exista un registro de arrendador ligado al folio
+            arr_id = _get_or_create_usuario_id_por_folio(
+                tabla="arrendadores",
+                folio=folio
+            )
+
+            # Construimos una URL pública igual que en _save_file_to_s3
+            region = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+            if region == "us-east-1":
+                base = f"https://{bucket}.s3.amazonaws.com"
+            else:
+                base = f"https://{bucket}.s3.{region}.amazonaws.com"
+
+            ruta_publica = f"{base}/{key_arrendador}"
+
+            # Registramos el TXT como un documento más del arrendador
+            _insert_document_with_folio(
+                folio=folio,
+                tipo_usuario="arrendador",
+                usuario_id=arr_id,
+                tipo_documento="propietario_admin_txt",
+                ruta=ruta_publica,
+                nombre_archivo="PROPIETARIO_ADMIN.txt",
+                mime="text/plain",
+                size=len(raw),
+            )
+
+            db.session.commit()
+
+        except Exception:
+            # Si algo falla aquí, que no truene toda la petición
+            app.logger.exception("No se pudo registrar PROPIETARIO_ADMIN en documentos")
+        # -----------------------------------------------------------------------
+
+    except Exception as e:
+        app.logger.exception("Error subiendo TXT de propietario a S3: %s", e)
+        return jsonify({"ok": False, "error": "Error subiendo el TXT al bucket S3"}), 500
+
+    return jsonify({
+        "ok": True,
+        "folio": folio,
+        "keys": {
+            "formularios": key_formularios,
+            "arrendador": key_arrendador,
+        }
+    }), 200
+
+
+@bp.get("/api/admin/folios-resumen")
+def api_admin_folios_resumen():
+    """
+    Devuelve un resumen de folios activos:
+    - folio
+    - asesor/asignado_a
+    - flags de documentos en arrendador, arrendatario y formularios (txt en S3)
+    """
+    # 1) Traemos folios + asignación + conteo de docs desde la vista
+    sql = text("""
+        SELECT
+          f.folio,
+          fa.asesor_id,
+          a.nombre AS asesor_nombre,
+          fa.referenciado_id,
+          CASE
+            WHEN fa.asesor_id IS NULL THEN NULL
+            WHEN fa.referenciado_id IS NULL THEN a.nombre
+            ELSE UPPER(SUBSTRING(a.nombre FROM 1 FOR 1)) || '. ' || ar.nombre
+          END AS asignado_a,
+          COALESCE(v.docs_arrendador, 0)   AS docs_arrendador,
+          COALESCE(v.docs_arrendatario, 0) AS docs_arrendatario
+        FROM public.folios f
+        LEFT JOIN public.folios_asignaciones fa
+          ON fa.folio = f.folio
+        LEFT JOIN public.asesores a
+          ON a.id = fa.asesor_id
+        LEFT JOIN public.asesores_referenciados ar
+          ON ar.id = fa.referenciado_id
+        LEFT JOIN public.v_documentos_resumen v
+          ON v.folio = f.folio
+        WHERE f.activo = TRUE
+        ORDER BY f.folio ASC
+        LIMIT 500;
+    """)
+    rows = db.session.execute(sql).mappings().all()
+
+    # 2) Intentamos detectar formularios en S3 (propietario/inquilino) de forma best-effort
+    docs_form_map = {}
+    try:
+        bucket = _current_bucket()
+        s3 = _get_s3_client()
+        prefix = os.getenv("S3_DOC_PREFIX", "").lstrip("/")
+    except Exception:
+        # Si no hay S3 configurado en el entorno local, simplemente marcamos formularios=False
+        bucket = None
+        s3 = None
+        prefix = os.getenv("S3_DOC_PREFIX", "").lstrip("/")
+
+    def tiene_formularios(folio: str) -> bool:
+        if not s3 or not bucket:
+            return False
+
+        cand_keys = set()
+        # Formularios normales generados por save_submission_bundle
+        cand_keys.add(_s3_key_for_submission(form_slug="propietario", folio=folio, email=None, ext="txt"))
+        cand_keys.add(_s3_key_for_submission(form_slug="inquilino", folio=folio, email=None, ext="txt"))
+
+        # Formularios generados por admin (nuestro TXT manual), por si usaste el prefijo "formularios/..."
+        if prefix:
+            cand_keys.add(f"{prefix}/formularios/propietario/{folio}_admin.txt".lstrip("/"))
+            cand_keys.add(f"{prefix}/formularios/inquilino/{folio}_admin.txt".lstrip("/"))
+        else:
+            cand_keys.add(f"formularios/propietario/{folio}_admin.txt".lstrip("/"))
+            cand_keys.add(f"formularios/inquilino/{folio}_admin.txt".lstrip("/"))
+
+        for key in cand_keys:
+            try:
+                s3.head_object(Bucket=bucket, Key=key)
+                return True
+            except Exception:
+                # Si no existe ese objeto, probamos el siguiente
+                continue
+        return False
+
+    out = []
+    for r in rows:
+        folio = r["folio"]
+        # Cache simple para no preguntar al bucket dos veces por el mismo folio
+        if folio not in docs_form_map:
+            docs_form_map[folio] = tiene_formularios(folio)
+
+        out.append({
+            "folio": folio,
+            "asesor_id": r["asesor_id"],
+            "asesor_nombre": r["asesor_nombre"],
+            "referenciado_id": r["referenciado_id"],
+            "asignado_a": r["asignado_a"],
+            "docs_arrendador": int(r["docs_arrendador"]) if r["docs_arrendador"] is not None else 0,
+            "docs_arrendatario": int(r["docs_arrendatario"]) if r["docs_arrendatario"] is not None else 0,
+            "docs_formularios": bool(docs_form_map[folio]),
+        })
+
+    return jsonify(out), 200
+
+@bp.delete("/api/admin/folio/<folio>/borrar")
+def api_admin_borrar_folio(folio):
+    """
+    Borra TODO lo relacionado a un folio:
+    - Registros en:
+        - public.documentos
+        - public.polizas
+        - public.folios_asignaciones
+        - public.folios_poliza
+        - public.arrendadores
+        - public.arrendatarios
+        - public.folios
+    - Objetos en S3 en:
+        - arrendador/{folio}/...
+        - arrendatario/{folio}/...
+        - formularios (propietario/inquilino) para ese folio
+    """
+    folio = (folio or "").strip().upper()
+    if not folio or not FOLIO_RE.match(folio):
+        return jsonify({"ok": False, "error": "Folio inválido. Formato esperado: AEPRA-YYYYMM-XXXX"}), 400
+
+    # Verificar que el folio exista
+    row = db.session.execute(
+        text("SELECT 1 FROM public.folios WHERE folio = :f"),
+        {"f": folio}
+    ).first()
+    if not row:
+        return jsonify({"ok": False, "error": "El folio no existe."}), 404
+
+    # --- Borrado en S3 (best effort) ---
+    s3_error = None
+    try:
+        bucket = _current_bucket()
+        s3 = _get_s3_client()
+        prefix_base = os.getenv("S3_DOC_PREFIX", "").strip("/")
+
+        def build_prefix(rel: str) -> str:
+            rel = rel.lstrip("/")
+            if prefix_base:
+                return f"{prefix_base}/{rel}".lstrip("/")
+            return rel
+
+        def delete_prefix(prefix: str):
+            # Elimina todos los objetos cuyo Key comience con 'prefix'
+            continuation_token = None
+            while True:
+                kwargs = {"Bucket": bucket, "Prefix": prefix}
+                if continuation_token:
+                    kwargs["ContinuationToken"] = continuation_token
+                resp = s3.list_objects_v2(**kwargs)
+                contents = resp.get("Contents", [])
+                if not contents:
+                    break
+                # Borrado en bloques de hasta 1000 objetos
+                for i in range(0, len(contents), 1000):
+                    chunk = contents[i:i+1000]
+                    s3.delete_objects(
+                        Bucket=bucket,
+                        Delete={
+                            "Objects": [{"Key": obj["Key"]} for obj in chunk],
+                            "Quiet": True,
+                        },
+                    )
+                if resp.get("IsTruncated"):
+                    continuation_token = resp.get("NextContinuationToken")
+                else:
+                    break
+
+        # Carpetas de arrendador / arrendatario ligadas al folio
+        pref_arr = build_prefix(f"arrendador/{folio}/")
+        pref_inq = build_prefix(f"arrendatario/{folio}/")
+        delete_prefix(pref_arr)
+        delete_prefix(pref_inq)
+
+        # Formularios de propietario / inquilino (claves específicas)
+        try:
+            key_prop_txt = _s3_key_for_submission(
+                form_slug="propietario", folio=folio, email=None, ext="txt"
+            )
+            key_inq_txt = _s3_key_for_submission(
+                form_slug="inquilino", folio=folio, email=None, ext="txt"
+            )
+            for k in (key_prop_txt, key_inq_txt):
+                try:
+                    s3.delete_object(Bucket=bucket, Key=k)
+                except Exception:
+                    pass
+        except Exception:
+            # si _s3_key_for_submission falla, no detenemos el resto del borrado
+            pass
+
+        # También intentamos borrar los TXT "_admin" si existen
+        if prefix_base:
+            admin_prop = f"{prefix_base}/formularios/propietario/{folio}_admin.txt".lstrip("/")
+            admin_inq  = f"{prefix_base}/formularios/inquilino/{folio}_admin.txt".lstrip("/")
+        else:
+            admin_prop = f"formularios/propietario/{folio}_admin.txt".lstrip("/")
+            admin_inq  = f"formularios/inquilino/{folio}_admin.txt".lstrip("/")
+        for k in (admin_prop, admin_inq):
+            try:
+                s3.delete_object(Bucket=bucket, Key=k)
+            except Exception:
+                pass
+
+    except Exception as e:
+        # No detenemos el borrado de BD por errores en S3,
+        # pero dejamos constancia en la respuesta.
+        app.logger.exception("Error borrando objetos S3 para folio %s: %s", folio, e)
+        s3_error = str(e)
+
+    # --- Borrado en BD ---
+    try:
+        # Hijos primero, luego folios
+        db.session.execute(text("DELETE FROM public.documentos WHERE folio = :f"), {"f": folio})
+        db.session.execute(text("DELETE FROM public.polizas WHERE folio = :f"), {"f": folio})
+        db.session.execute(text("DELETE FROM public.folios_asignaciones WHERE folio = :f"), {"f": folio})
+        db.session.execute(text("DELETE FROM public.folios_poliza WHERE folio = :f"), {"f": folio})
+        db.session.execute(text("DELETE FROM public.arrendadores WHERE folio = :f"), {"f": folio})
+        db.session.execute(text("DELETE FROM public.arrendatarios WHERE folio = :f"), {"f": folio})
+        db.session.execute(text("DELETE FROM public.folios WHERE folio = :f"), {"f": folio})
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.exception("Error borrando folio %s en BD: %s", folio, e)
+        return jsonify({
+            "ok": False,
+            "error": "Error borrando registros en la base de datos.",
+            "error_detail": str(e),
+            "s3_error": s3_error,
+        }), 500
+
+    return jsonify({
+        "ok": True,
+        "folio": folio,
+        "s3_error": s3_error,
+    }), 200
+
 # ===== Otras páginas
 @bp.route("/terminos-mascotas")
 def terminos_mascotas():

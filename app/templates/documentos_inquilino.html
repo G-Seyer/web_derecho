@@ -275,19 +275,53 @@
       </div>
     </div>
 
+    <!-- TIPO DE PERSONA (FÍSICA / MORAL) Y CONTRATO / PODER -->
+    <div class="card full mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-3">Tipo de persona</h2>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label d-block">¿El inquilino es persona física o moral?</label>
+            <div class="form-check">
+              <input class="form-check-input folio-locked" type="radio" name="tipo_persona" id="persona_fisica" value="fisica" checked disabled>
+              <label class="form-check-label" for="persona_fisica">Persona física</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input folio-locked" type="radio" name="tipo_persona" id="persona_moral" value="moral" disabled>
+              <label class="form-check-label" for="persona_moral">Persona moral</label>
+            </div>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label" for="contrato_poder">📑 Contrato o poder notarial (solo persona moral)</label>
+            <input id="contrato_poder" type="file" name="contrato_poder" accept=".pdf,image/*" class="form-control folio-locked" disabled>
+            <div class="form-text">
+              Solo se requiere cuando el inquilino es persona moral. Para persona física no se sube este documento.
+            </div>
+            <div class="doc-file small text-secondary mt-2" data-for="contrato_poder">Sin archivo</div>
+            <div class="doc-status mt-2">
+              <span class="doc-dot"></span><span class="doc-text">Pendiente</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- DOCUMENTOS A SUBIR -->
-    <div class="doc-grid"><div class="doc-section-title" style="grid-column:1/-1; margin:8px 0 6px;">📁 <span class="h6 text-primary">Documentos del Inquilino</span></div>
+    <div class="doc-grid">
+      <div class="doc-section-title" style="grid-column:1/-1; margin:8px 0 6px;">
+        📁 <span class="h6 text-primary">Documentos del Inquilino</span>
+      </div>
 
       <div class="doc-card" data-field="identificacion">
         <div class="fw-semibold mb-1">🪪 Copia de identificación oficial vigente</div>
-        <input id="identificacion" type="file" name="identificacion" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <input id="identificacion" type="file" name="identificacion" accept=".pdf,image/*" class="folio-locked" disabled>
         <div class="doc-file small text-secondary mt-2" data-for="identificacion">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
       <div class="doc-card" data-field="comprobante_domicilio_anterior_inquilino">
         <div class="fw-semibold mb-1">🏠 Comprobante de domicilio del inmueble donde vivía anteriormente (inquilino)</div>
-        <input id="dom_ant_inq" type="file" name="comprobante_domicilio_anterior_inquilino" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <input id="dom_ant_inq" type="file" name="comprobante_domicilio_anterior_inquilino" accept=".pdf,image/*" class="folio-locked" disabled>
         <div class="doc-file small text-secondary mt-2" data-for="dom_ant_inq">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
@@ -296,54 +330,56 @@
       <div class="doc-card" data-field="comprobante_ingresos_inquilino">
         <div class="fw-semibold mb-1">💼 Comprobante de ingresos (últimos 3 meses) – Inquilino</div>
         <label class="form-label small">Mes 1 (más reciente)</label>
-        <input id="ing_inq_m1" type="file" name="comprobante_ingresos_inquilino_mes1" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <input id="ing_inq_m1" type="file" name="comprobante_ingresos_inquilino_mes1" accept=".pdf,image/*" class="folio-locked" disabled>
         <div class="doc-file small text-secondary mt-1" data-for="ing_inq_m1">Sin archivo</div>
 
         <label class="form-label small mt-2">Mes 2</label>
-        <input id="ing_inq_m2" type="file" name="comprobante_ingresos_inquilino_mes2" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <input id="ing_inq_m2" type="file" name="comprobante_ingresos_inquilino_mes2" accept=".pdf,image/*" class="folio-locked" disabled>
         <div class="doc-file small text-secondary mt-1" data-for="ing_inq_m2">Sin archivo</div>
 
         <label class="form-label small mt-2">Mes 3</label>
-        <input id="ing_inq_m3" type="file" name="comprobante_ingresos_inquilino_mes3" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <input id="ing_inq_m3" type="file" name="comprobante_ingresos_inquilino_mes3" accept=".pdf,image/*" class="folio-locked" disabled>
         <div class="doc-file small text-secondary mt-1" data-for="ing_inq_m3">Sin archivo</div>
 
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
       <div class="doc-divider" style="grid-column:1/-1;"><hr class="my-3"></div>
-      <div class="doc-section-title" style="grid-column:1/-1; margin:0 0 6px;">🧷 <span class="h6 text-primary">Documentos del Aval</span></div>
+      <div class="doc-section-title" style="grid-column:1/-1; margin:0 0 6px;">
+        🧷 <span class="h6 text-primary">Documentos del Aval</span>
+      </div>
 
       <div class="doc-card" data-field="identificacion_oficial_aval">
         <div class="fw-semibold mb-1">🪪 Copia de identificación oficial vigente del aval</div>
-        <input id="id_aval" type="file" name="identificacion_oficial_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <input id="id_aval" type="file" name="identificacion_oficial_aval" accept=".pdf,image/*" class="folio-locked" disabled>
         <div class="doc-file small text-secondary mt-2" data-for="id_aval">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
       
       <div class="doc-card" data-field="predial_inmueble_aval">
         <div class="fw-semibold mb-1">🧾 Copia de predial del inmueble del aval</div>
-        <input id="pred_av" type="file" name="predial_inmueble_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <input id="pred_av" type="file" name="predial_inmueble_aval" accept=".pdf,image/*" class="folio-locked" disabled>
         <div class="doc-file small text-secondary mt-2" data-for="pred_av">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
       <div class="doc-card" data-field="escritura_inmueble_aval">
         <div class="fw-semibold mb-1">📄 Copia de escritura del inmueble del aval</div>
-        <input id="esc_av" type="file" name="escritura_inmueble_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <input id="esc_av" type="file" name="escritura_inmueble_aval" accept=".pdf,image/*" class="folio-locked" disabled>
         <div class="doc-file small text-secondary mt-2" data-for="esc_av">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
       <div class="doc-card" data-field="domicilio_inmueble_aval">
         <div class="fw-semibold mb-1">🏠 Comprobante de domicilio del inmueble del aval</div>
-        <input id="dom_av" type="file" name="domicilio_inmueble_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <input id="dom_av" type="file" name="domicilio_inmueble_aval" accept=".pdf,image/*" class="folio-locked" disabled>
         <div class="doc-file small text-secondary mt-2" data-for="dom_av">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
 
       <div class="doc-card" data-field="folio_real_aval">
         <div class="fw-semibold mb-1">📘 Constancia de folio real del inmueble del aval</div>
-        <input id="folio_real_av" type="file" name="folio_real_aval" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <input id="folio_real_av" type="file" name="folio_real_aval" accept=".pdf,image/*" class="folio-locked" disabled>
         <div class="doc-file small text-secondary mt-2" data-for="folio_real_av">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
@@ -352,29 +388,17 @@
       <div class="doc-card" data-field="comprobante_ingresos_aval">
         <div class="fw-semibold mb-1">💼 Comprobante de ingresos (últimos 3 meses) – Aval</div>
         <label class="form-label small">Mes 1 (más reciente)</label>
-        <input id="ing_av_m1" type="file" name="comprobante_ingresos_aval_mes1" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <input id="ing_av_m1" type="file" name="comprobante_ingresos_aval_mes1" accept=".pdf,image/*" class="folio-locked" disabled>
         <div class="doc-file small text-secondary mt-1" data-for="ing_av_m1">Sin archivo</div>
 
         <label class="form-label small mt-2">Mes 2</label>
-        <input id="ing_av_m2" type="file" name="comprobante_ingresos_aval_mes2" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <input id="ing_av_m2" type="file" name="comprobante_ingresos_aval_mes2" accept=".pdf,image/*" class="folio-locked" disabled>
         <div class="doc-file small text-secondary mt-1" data-for="ing_av_m2">Sin archivo</div>
 
         <label class="form-label small mt-2">Mes 3</label>
-        <input id="ing_av_m3" type="file" name="comprobante_ingresos_aval_mes3" accept=".pdf,image/*" required class="folio-locked" disabled>
+        <input id="ing_av_m3" type="file" name="comprobante_ingresos_aval_mes3" accept=".pdf,image/*" class="folio-locked" disabled>
         <div class="doc-file small text-secondary mt-1" data-for="ing_av_m3">Sin archivo</div>
 
-        <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
-      </div>
-
-      <div class="doc-card" data-field="contrato_poder">
-        <div class="fw-semibold mb-1">📑 Contrato o poder notarial (si es persona moral)</div>
-        <div class="form-check mb-2">
-          <input class="form-check-input" type="checkbox" id="pfisica">
-          <label class="form-check-label" for="pfisica">En caso de ser persona física, marca esta casilla.</label>
-        </div>
-        <input id="contrato_poder" type="file" name="contrato_poder" accept=".pdf,image/*" class="folio-locked" >
-        <div class="form-text">Requerido por defecto (persona moral). Si marcas “persona física”, se desactiva.</div>
-        <div class="doc-file small text-secondary mt-2" data-for="contrato_poder">Sin archivo</div>
         <div class="doc-status mt-2"><span class="doc-dot"></span><span class="doc-text">Pendiente</span></div>
       </div>
     </div>
@@ -496,33 +520,54 @@
 })();
 </script>
 
-<!-- Persona física/moral -->
+<!-- Persona física / moral: controla contrato/poder -->
 <script>
 (function(){
-  const chk = document.getElementById('pfisica');
-  const file = document.getElementById('contrato_poder');
-  if(!chk || !file) return;
+  const radioFis = document.getElementById('persona_fisica');
+  const radioMor = document.getElementById('persona_moral');
+  const file     = document.getElementById('contrato_poder');
+  if (!file || (!radioFis && !radioMor)) return;
 
-  function lockedByFolio(){
-    return document.querySelector('.folio-locked:disabled') !== null;
-  }
+  // Flag global sencillo: true = folio bloqueado, false = folio verificado
+  let folioLocked = true;
 
   function apply(){
-    if(!chk.checked){
-      file.setAttribute('required','');
-      file.disabled = lockedByFolio();
-    }else{
+    const esMoral = radioMor && radioMor.checked;
+
+    if (esMoral && !folioLocked) {
+      // Persona moral y folio ya verificado → habilitamos el archivo
+      file.disabled = false;
+      file.setAttribute('required', '');
+    } else {
+      // Persona física o folio bloqueado → no se usa el archivo
       file.value = '';
       file.disabled = true;
       file.removeAttribute('required');
     }
-    try { file.dispatchEvent(new Event('change', {bubbles:true})); } catch(e){}
+
+    try {
+      file.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch (e) {}
   }
 
-  chk.addEventListener('change', apply);
-  document.addEventListener('folio:unlock', apply);
-  document.addEventListener('folio:lock', apply);
+  // Cambios de tipo de persona
+  radioFis && radioFis.addEventListener('change', apply);
+  radioMor && radioMor.addEventListener('change', apply);
 
+  // Eventos que ya dispara el script del folio:
+  // cuando se valida el folio: document.dispatchEvent(new CustomEvent('folio:unlock'));
+  // cuando se bloquea de nuevo: document.dispatchEvent(new CustomEvent('folio:lock'));
+  document.addEventListener('folio:unlock', function(){
+    folioLocked = false;
+    apply();
+  });
+
+  document.addEventListener('folio:lock', function(){
+    folioLocked = true;
+    apply();
+  });
+
+  // Estado inicial (antes de verificar folio)
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', apply);
   } else {
