@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Registro de Marcas | Protección Legal</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='marcas.css') }}">
+</head>
+<body class="marcas-page">
+
+  <div class="m-noise"></div>
+  <div class="m-orb m-orb--one"></div>
+  <div class="m-orb m-orb--two"></div>
+
+  <main class="m-shell">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="m-flashWrap">
+          {% for category, message in messages %}
+            <div class="m-flash m-flash--{{ category }}">
+              {{ message|safe }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- HERO -->
+    <section class="m-hero">
+      <div class="m-hero__content m-reveal">
+        <span class="m-eyebrow">Protección legal · Identidad comercial · Seguimiento estratégico</span>
+
+        <h1 class="m-title">
+          Protege tu <span>marca</span> con una estrategia clara y una imagen profesional
+        </h1>
+
+        <p class="m-description">
+          Te acompañamos en el proceso de registro de marca desde el análisis previo y la búsqueda
+          de viabilidad, hasta la presentación y seguimiento del trámite, para que tu proyecto
+          tenga una base sólida desde el inicio.
+        </p>
+
+        <div class="m-actions">
+          <a href="#contacto" class="m-btn m-btn--primary">Solicitar asesoría</a>
+          <a href="#servicios" class="m-btn m-btn--ghost">Conocer servicios</a>
+        </div>
+
+        <div class="m-miniStats">
+          <div class="m-miniStats__item">
+            <strong>Análisis previo</strong>
+            <span>para reducir riesgos</span>
+          </div>
+          <div class="m-miniStats__item">
+            <strong>Seguimiento real</strong>
+            <span>durante el trámite</span>
+          </div>
+          <div class="m-miniStats__item">
+            <strong>Identidad visual</strong>
+            <span>si aún no tienes logo</span>
+          </div>
+        </div>
+      </div>
+
+      <aside class="m-heroCard m-reveal m-reveal--delay">
+        <div class="m-heroCard__top">
+          <span class="m-chip">Servicio destacado</span>
+          <h2>Registro y estrategia de marca</h2>
+          <p>
+            Tu marca es uno de tus activos más valiosos. Nos encargamos de protegerla desde el inicio:
+            analizamos su viabilidad, gestionamos el registro y damos seguimiento puntual hasta obtener
+            tu título, para que puedas enfocarte en hacer crecer tu negocio.
+          </p>
+        </div>
+
+        <div class="m-heroCard__list">
+          <div class="m-feature">
+            <span class="m-feature__icon">01</span>
+            <div>
+              <h3>Búsqueda previa</h3>
+              <p>Revisión inicial para detectar similitudes, coincidencias y posibles riesgos.</p>
+            </div>
+          </div>
+
+          <div class="m-feature">
+            <span class="m-feature__icon">02</span>
+            <div>
+              <h3>Preparación del trámite</h3>
+              <p>Integración de la información necesaria con un enfoque ordenado y estratégico.</p>
+            </div>
+          </div>
+
+          <div class="m-feature">
+            <span class="m-feature__icon">03</span>
+            <div>
+              <h3>Seguimiento</h3>
+              <p>Monitoreo del expediente y atención a observaciones o requerimientos.</p>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- BLOQUE DE CONFIANZA -->
+    <section class="m-trustBand m-reveal">
+      <div class="m-trustBand__item">
+        <span>Marcas</span>
+        <strong>Registro y viabilidad</strong>
+      </div>
+      <div class="m-trustBand__item">
+        <span>Identidad</span>
+        <strong>Logo y concepto visual</strong>
+      </div>
+      <div class="m-trustBand__item">
+        <span>Continuidad</span>
+        <strong>Seguimiento y renovación</strong>
+      </div>
+      <div class="m-trustBand__item">
+        <span>Protección</span>
+        <strong>Derechos relacionados</strong>
+      </div>
+    </section>
+
+    <!-- SERVICIOS -->
+    <section id="servicios" class="m-section m-section--services">
+      <div class="m-sectionHead m-reveal">
+        <span class="m-kicker">Servicios</span>
+        <h2>Protección integral para tu marca y tu identidad comercial</h2>
+        <p>
+          Te apoyamos en las etapas más importantes del proceso para que tu marca
+          tenga una estructura más sólida, profesional y bien respaldada.
+        </p>
+      </div>
+
+      <div class="m-serviceGrid">
+        <article class="m-serviceCard m-reveal">
+          <span class="m-serviceCard__number">01</span>
+          <h3>Registro de marca</h3>
+          <p>Asesoría para iniciar y estructurar correctamente la protección de tu identidad comercial.</p>
+        </article>
+
+        <article class="m-serviceCard m-reveal">
+          <span class="m-serviceCard__number">02</span>
+          <h3>Búsqueda de viabilidad</h3>
+          <p>Revisión previa para detectar coincidencias, similitudes y posibles conflictos.</p>
+        </article>
+
+        <article class="m-serviceCard m-reveal">
+          <span class="m-serviceCard__number">03</span>
+          <h3>Seguimiento del trámite</h3>
+          <p>Monitoreo del procedimiento y acompañamiento durante el avance del expediente.</p>
+        </article>
+
+        <article class="m-serviceCard m-reveal">
+          <span class="m-serviceCard__number">04</span>
+          <h3>Renovaciones</h3>
+          <p>Control de tiempos y continuidad de la protección legal de la marca.</p>
+        </article>
+
+        <article class="m-serviceCard m-reveal">
+          <span class="m-serviceCard__number">05</span>
+          <h3>Derechos de autor</h3>
+          <p>Orientación complementaria para proteger contenido, diseño y elementos creativos.</p>
+        </article>
+
+        <article class="m-serviceCard m-reveal">
+          <span class="m-serviceCard__number">06</span>
+          <h3>Creación de logo</h3>
+          <p>Desarrollo visual para proyectos que aún no cuentan con identidad gráfica sólida.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- PROCESO -->
+    <section class="m-section m-section--timeline">
+      <div class="m-sectionHead m-reveal">
+        <span class="m-kicker">Proceso</span>
+        <h2>Una ruta clara para iniciar, presentar y dar seguimiento a tu marca</h2>
+      </div>
+
+      <div class="m-timeline">
+        <article class="m-step m-reveal">
+          <div class="m-step__line"></div>
+          <span class="m-step__dot"></span>
+          <div class="m-step__content">
+            <span class="m-step__tag">Paso 1</span>
+            <h3>Primer análisis</h3>
+            <p>Revisamos el nombre, el giro y el enfoque de tu proyecto para definir el punto de partida.</p>
+          </div>
+        </article>
+
+        <article class="m-step m-reveal">
+          <div class="m-step__line"></div>
+          <span class="m-step__dot"></span>
+          <div class="m-step__content">
+            <span class="m-step__tag">Paso 2</span>
+            <h3>Estudio de viabilidad</h3>
+            <p>Analizamos la posibilidad de registro y detectamos riesgos antes de avanzar.</p>
+          </div>
+        </article>
+
+        <article class="m-step m-reveal">
+          <div class="m-step__line"></div>
+          <span class="m-step__dot"></span>
+          <div class="m-step__content">
+            <span class="m-step__tag">Paso 3</span>
+            <h3>Presentación del trámite</h3>
+            <p>Se integra la información necesaria y se organiza correctamente el inicio del procedimiento.</p>
+          </div>
+        </article>
+
+        <article class="m-step m-reveal">
+          <span class="m-step__dot"></span>
+          <div class="m-step__content">
+            <span class="m-step__tag">Paso 4</span>
+            <h3>Seguimiento y respuesta</h3>
+            <p>Se monitorea el avance del expediente y se atienden observaciones o requerimientos si aparecen.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- REQUISITOS -->
+    <section class="m-section m-section--docs">
+      <div class="m-sectionHead m-reveal">
+        <span class="m-kicker">Documentación inicial</span>
+        <h2>Lo esencial para comenzar</h2>
+      </div>
+
+      <div class="m-docGrid">
+        <article class="m-docCard m-reveal">
+          <span class="m-docCard__mark"></span>
+          <h3>Identificación oficial</h3>
+          <p>Documento vigente y legible.</p>
+        </article>
+
+        <article class="m-docCard m-reveal">
+          <span class="m-docCard__mark"></span>
+          <h3>Comprobante de domicilio</h3>
+          <p>Información actual y visible.</p>
+        </article>
+
+        <article class="m-docCard m-reveal">
+          <span class="m-docCard__mark"></span>
+          <h3>Logo o propuesta visual</h3>
+          <p>Solo si ya existe. Si aún no cuentas con él, puede desarrollarse desde cero.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- CONTACTO -->
+    <section id="contacto" class="m-contact m-reveal">
+      <div class="m-contact__intro">
+        <span class="m-kicker">Contacto</span>
+        <h2>Cuéntanos tu proyecto y te orientamos para iniciar</h2>
+        <p>
+          Comparte con nosotros el nombre de tu marca o la idea que deseas proteger,
+          y te ayudamos a revisar la mejor forma de comenzar el proceso.
+        </p>
+      </div>
+
+      <form class="m-form" method="post" action="{{ url_for('routes.marcas') }}">
+        <div class="m-formRow">
+          <input class="m-input" type="text" name="nombre" placeholder="Nombre completo" required>
+          <input class="m-input" type="tel" name="telefono" placeholder="Teléfono / WhatsApp">
+        </div>
+
+        <input class="m-input" type="email" name="correo" placeholder="Correo electrónico" required>
+
+        <textarea
+          class="m-input m-input--textarea"
+          name="mensaje"
+          placeholder="Cuéntanos el nombre de tu marca o tu proyecto"
+          rows="5"
+          required
+        ></textarea>
+
+        <button class="m-btn m-btn--primary m-btn--full" type="submit">
+          Solicitar asesoría
+        </button>
+      </form>
+    </section>
+
+  </main>
+
+  <script src="{{ url_for('static', filename='marcas.js') }}"></script>
+<a href="https://wa.me/5215621909237" 
+   class="m-whatsapp" 
+   target="_blank">
+
+    <svg viewBox="0 0 32 32" width="26" height="26" fill="white">
+        <path d="M16 .4C7.4.4.4 7.3.4 16c0 2.8.7 5.5 2.1 7.9L.4 31.6l7.9-2.1c2.3 1.3 5 2.1 7.7 2.1h.1c8.6 0 15.6-6.9 15.6-15.6C31.6 7.3 24.6.4 16 .4zm0 28.5c-2.4 0-4.7-.6-6.7-1.9l-.5-.3-4.7 1.2 1.3-4.6-.3-.5c-1.3-2-2-4.4-2-6.8C3.1 8.8 8.8 3.1 16 3.1s12.9 5.7 12.9 12.9S23.2 28.9 16 28.9zm7.1-9.7c-.4-.2-2.4-1.2-2.8-1.3-.4-.2-.6-.2-.9.2-.2.4-1 1.3-1.2 1.6-.2.2-.5.3-.9.1-.4-.2-1.8-.7-3.4-2.3-1.3-1.1-2.2-2.5-2.5-2.9-.3-.4 0-.6.2-.8.2-.2.4-.5.6-.7.2-.2.3-.4.4-.7.1-.2 0-.5-.1-.7-.1-.2-.9-2.1-1.3-2.9-.3-.7-.6-.6-.9-.6h-.8c-.3 0-.7.1-1 .5-.3.4-1.3 1.3-1.3 3.2 0 1.9 1.4 3.7 1.6 3.9.2.2 2.8 4.3 6.8 6 .9.4 1.6.6 2.2.8.9.3 1.7.3 2.3.2.7-.1 2.4-1 2.7-1.9.3-.9.3-1.7.2-1.9-.1-.2-.3-.3-.7-.5z"/>
+    </svg>
+
+</a>
+</body>
+</html>

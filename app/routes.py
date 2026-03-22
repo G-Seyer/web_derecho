@@ -3,6 +3,8 @@ import os
 import re
 import mimetypes
 from datetime import date, datetime
+from flask_mail import Message
+from app import mail
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     flash, jsonify, current_app as app, Response, session
@@ -1361,3 +1363,92 @@ def api_filtrar_folios():
     base += " ORDER BY fa.assigned_at DESC LIMIT 200"
     res = db.session.execute(text(base), params).all()
     return jsonify([_row_to_dict(r) for r in res]), 200
+from flask import render_template
+
+from datetime import datetime
+
+@bp.route("/marcas", methods=["GET", "POST"])
+def marcas():
+    if request.method == "POST":
+        nombre = (request.form.get("nombre") or "").strip()
+        correo = (request.form.get("correo") or "").strip()
+        telefono = (request.form.get("telefono") or "").strip()
+        mensaje = (request.form.get("mensaje") or "").strip()
+
+        if not nombre or not correo or not mensaje:
+            flash("Nombre, correo y mensaje son obligatorios.", "warning")
+            return render_template("marcas.html", form=request.form), 400
+
+        if not EMAIL_RE.match(correo):
+            flash("Correo no válido.", "warning")
+            return render_template("marcas.html", form=request.form), 400
+
+        try:
+            m = MensajeContacto(
+                nombre=nombre,
+                correo=correo,
+                telefono=telefono or None,
+                mensaje=f"[Marcas] {mensaje}"
+            )
+            db.session.add(m)
+            db.session.commit()
+
+            # Correo interno para ti
+            try:
+                destinatario = os.getenv("CONTACT_RECEIVER") or os.getenv("EMAIL_USER")
+
+                aviso = Message(
+                    subject=f"[Marcas] Nueva solicitud de {nombre}",
+                    sender=os.getenv("EMAIL_USER"),
+                    recipients=[destinatario],
+                    reply_to=correo,
+                    html=f"""
+                    <div style="font-family:Arial,Helvetica,sans-serif;padding:24px;background:#f8f6f1;color:#222;">
+                        <div style="max-width:680px;margin:0 auto;background:#fff;border:1px solid #e7dcc7;border-radius:12px;overflow:hidden;">
+                            <div style="background:linear-gradient(135deg,#d7b06a,#b68938);padding:18px 24px;color:#fff;">
+                                <h2 style="margin:0;">[Marcas] Nueva solicitud recibida</h2>
+                            </div>
+
+                            <div style="padding:24px;">
+                                <p><strong>Nombre:</strong> {nombre}</p>
+                                <p><strong>Correo:</strong> {correo}</p>
+                                <p><strong>Teléfono:</strong> {telefono if telefono else 'No proporcionado'}</p>
+
+                                <div style="margin-top:20px;padding:16px;background:#faf7f0;border:1px solid #eadfc9;border-radius:10px;">
+                                    <p style="margin:0 0 8px 0;"><strong>Mensaje:</strong></p>
+                                    <p style="margin:0;white-space:pre-line;">{mensaje}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    """
+                )
+                mail.send(aviso)
+
+            except Exception as e:
+                app.logger.exception("Error enviando correo interno de marcas: %s", e)
+
+            # Si no usarás S3 por ahora, déjalo comentado
+            """
+            try:
+                save_submission_bundle(
+                    "marcas",
+                    "Formulario de Marcas",
+                    folio=None,
+                    email=correo,
+                    upload_attachments=True
+                )
+            except Exception as e:
+                app.logger.warning("No se pudo subir el documento de marcas a S3: %s", e)
+            """
+
+            flash("¡Gracias! Tu solicitud fue enviada.", "success")
+            return redirect(url_for("routes.marcas"))
+
+        except Exception as e:
+            db.session.rollback()
+            app.logger.exception("Error guardando solicitud de marcas: %s", e)
+            flash("Ocurrió un error al guardar tu solicitud. Intenta de nuevo.", "danger")
+            return render_template("marcas.html", form=request.form), 500
+
+    return render_template("marcas.html")
