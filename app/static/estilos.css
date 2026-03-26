@@ -1652,3 +1652,212 @@ body.page-docs .doc-card input[type="file"]{
   .cards-servicio .card { display: flex; }
   .cards-servicio .card-body { display: flex; flex-direction: column; }
 }
+/* =========================
+   SECCIÓN CTA MARCAS HOME
+========================= */
+.cta-marcas-home {
+  position: relative;
+  max-width: 1200px;
+  margin: 70px auto;
+  padding: 38px;
+  border-radius: 28px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1.15fr 0.9fr;
+  gap: 28px;
+  align-items: center;
+  background:
+    radial-gradient(circle at top left, rgba(210, 216, 223, 0.65), transparent 32%),
+    linear-gradient(135deg, #3a4048 0%, #697381 52%, #9ba5b1 100%);
+  box-shadow: 0 24px 55px rgba(72, 81, 92, 0.22);
+}
+
+.cta-marcas-home__glow {
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  right: -70px;
+  top: -70px;
+  background: rgba(255, 255, 255, 0.16);
+  filter: blur(20px);
+  pointer-events: none;
+}
+
+.cta-marcas-home__content,
+.cta-marcas-home__panel {
+  position: relative;
+  z-index: 1;
+}
+
+.cta-marcas-home__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #eef3f8;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(10px);
+}
+
+.cta-marcas-home__title {
+  margin: 18px 0 14px;
+  font-size: clamp(2.2rem, 4vw, 3.6rem);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  color: #ffffff;
+}
+
+.cta-marcas-home__title span {
+  color: #dce3ea;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.12);
+}
+
+.cta-marcas-home__text {
+  margin: 0;
+  max-width: 680px;
+  color: #eef2f6;
+  font-size: 1.02rem;
+  line-height: 1.8;
+}
+
+.cta-marcas-home__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 26px;
+}
+
+.cta-marcas-home__btn {
+  min-height: 54px;
+  padding: 0 24px;
+  border-radius: 999px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  transition: 0.3s ease;
+}
+
+.cta-marcas-home__btn--primary {
+  background: linear-gradient(135deg, #d8dde3 0%, #b2bcc7 58%, #8893a0 100%);
+  color: #20252b;
+  box-shadow: 0 14px 34px rgba(66, 73, 84, 0.18);
+}
+
+.cta-marcas-home__btn--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 40px rgba(66, 73, 84, 0.24);
+}
+
+.cta-marcas-home__btn--ghost {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(10px);
+}
+
+.cta-marcas-home__btn--ghost:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.cta-marcas-home__card {
+  padding: 28px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 34px rgba(55, 62, 71, 0.16);
+}
+
+.cta-marcas-home__miniTag {
+  display: inline-block;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #f3f6f9;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.cta-marcas-home__card h3 {
+  margin: 0 0 12px;
+  font-size: 1.55rem;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+}
+
+.cta-marcas-home__card p {
+  margin: 0;
+  color: #edf2f6;
+  line-height: 1.75;
+}
+
+.cta-marcas-home__stats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.cta-marcas-home__stat {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.cta-marcas-home__stat strong {
+  display: block;
+  color: #ffffff;
+  margin-bottom: 4px;
+  font-size: 0.96rem;
+}
+
+.cta-marcas-home__stat span {
+  color: #e1e7ed;
+  font-size: 0.9rem;
+}
+
+/* RESPONSIVE */
+@media (max-width: 980px) {
+  .cta-marcas-home {
+    grid-template-columns: 1fr;
+    padding: 30px;
+  }
+}
+
+@media (max-width: 640px) {
+  .cta-marcas-home {
+    margin: 50px 16px;
+    padding: 22px;
+    border-radius: 22px;
+  }
+
+  .cta-marcas-home__actions {
+    flex-direction: column;
+  }
+
+  .cta-marcas-home__btn {
+    width: 100%;
+  }
+
+  .cta-marcas-home__title {
+    font-size: 2rem;
+  }
+
+  .cta-marcas-home__card {
+    padding: 20px;
+  }
+}
